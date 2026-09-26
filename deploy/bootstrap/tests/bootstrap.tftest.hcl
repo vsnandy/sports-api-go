@@ -28,6 +28,10 @@ run "plan_role_trust" {
     condition     = jsondecode(aws_iam_role.plan.assume_role_policy).Statement[0].Principal.Federated == "arn:aws:iam::123456789012:oidc-provider/token.actions.githubusercontent.com"
     error_message = "plan role must trust the GitHub OIDC provider"
   }
+  assert {
+    condition     = length(jsondecode(aws_iam_role.plan.assume_role_policy).Statement) == 1
+    error_message = "plan role trust policy must have exactly one statement"
+  }
 }
 
 run "deploy_role_trust" {
@@ -37,8 +41,16 @@ run "deploy_role_trust" {
     error_message = "deploy role must trust only the main branch"
   }
   assert {
+    condition     = jsondecode(aws_iam_role.deploy.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:aud"] == "sts.amazonaws.com"
+    error_message = "deploy role must require the sts.amazonaws.com audience"
+  }
+  assert {
     condition     = length(keys(jsondecode(aws_iam_role.deploy.assume_role_policy).Statement[0].Condition)) == 1
     error_message = "deploy role trust must use only StringEquals (no wildcard StringLike)"
+  }
+  assert {
+    condition     = length(jsondecode(aws_iam_role.deploy.assume_role_policy).Statement) == 1
+    error_message = "deploy role trust policy must have exactly one statement"
   }
 }
 
@@ -79,6 +91,18 @@ run "deploy_policy_denies_boundary_removal" {
     ]).Effect == "Deny"
     error_message = "the deploy policy must explicitly deny removing the boundary"
   }
+  assert {
+    condition = one([
+      for s in jsondecode(aws_iam_policy.deploy.policy).Statement : s if s.Sid == "DenyBoundaryRemoval"
+    ]).Action == ["iam:DeleteRolePermissionsBoundary"]
+    error_message = "DenyBoundaryRemoval must deny exactly iam:DeleteRolePermissionsBoundary"
+  }
+  assert {
+    condition = one([
+      for s in jsondecode(aws_iam_policy.deploy.policy).Statement : s if s.Sid == "DenyBoundaryRemoval"
+    ]).Resource == ["arn:aws:iam::123456789012:role/sports-api-lambda"]
+    error_message = "DenyBoundaryRemoval must scope to the sports-api-lambda role"
+  }
 }
 
 run "boundary_scopes_ssm_to_prefix" {
@@ -100,7 +124,7 @@ run "lambda_statements_cover_qualified_arn" {
   assert {
     condition = one([
       for s in jsondecode(aws_iam_policy.read.policy).Statement : s if s.Sid == "LambdaRead"
-    ]).Resource == [
+      ]).Resource == [
       "arn:aws:lambda:us-east-1:123456789012:function:sports-api",
       "arn:aws:lambda:us-east-1:123456789012:function:sports-api:*",
     ]
@@ -109,7 +133,7 @@ run "lambda_statements_cover_qualified_arn" {
   assert {
     condition = one([
       for s in jsondecode(aws_iam_policy.deploy.policy).Statement : s if s.Sid == "LambdaManage"
-    ]).Resource == [
+      ]).Resource == [
       "arn:aws:lambda:us-east-1:123456789012:function:sports-api",
       "arn:aws:lambda:us-east-1:123456789012:function:sports-api:*",
     ]
@@ -128,10 +152,18 @@ run "existing_oidc_provider_is_not_created" {
   }
 }
 
-run "rejects_bad_ssm_prefix" {
+run "rejects_ssm_prefix_missing_leading_slash" {
   command = plan
   variables {
-    ssm_prefix = "sports-api"
+    ssm_prefix = "sports-api/"
+  }
+  expect_failures = [var.ssm_prefix]
+}
+
+run "rejects_ssm_prefix_missing_trailing_slash" {
+  command = plan
+  variables {
+    ssm_prefix = "/sports-api"
   }
   expect_failures = [var.ssm_prefix]
 }
