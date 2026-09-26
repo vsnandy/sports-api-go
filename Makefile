@@ -13,6 +13,8 @@ build:
 	cd dist && rm -f bootstrap.zip && zip -qX bootstrap.zip bootstrap
 
 tf-init:
+	$(if $(TF_STATE_BUCKET),,$(error TF_STATE_BUCKET is required))
+	$(if $(AWS_REGION),,$(error AWS_REGION is required))
 	terraform -chdir=deploy/terraform init -backend-config=bucket=$(TF_STATE_BUCKET) -backend-config=region=$(AWS_REGION)
 
 deploy: build
