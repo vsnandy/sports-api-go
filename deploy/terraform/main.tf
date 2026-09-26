@@ -52,6 +52,8 @@ data "aws_iam_policy_document" "assume" {
 resource "aws_iam_role" "api" {
   name               = "${local.name}-lambda"
   assume_role_policy = data.aws_iam_policy_document.assume.json
+  # Created by deploy/bootstrap. The CI deploy role may only write this role with the boundary attached.
+  permissions_boundary = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/${local.name}-lambda-boundary"
 }
 
 data "aws_iam_policy_document" "api" {
