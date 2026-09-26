@@ -1,0 +1,34 @@
+{
+  "id": 123456,
+  "seasonId": 2026,
+  "settings": {
+    "name": "Office League",
+    "rosterSettings": {"lineupSlotCounts": {"0": 1, "2": 2, "4": 2, "6": 1, "23": 1, "16": 1, "17": 1, "20": 6, "21": 1, "7": 0}},
+    "scoringSettings": {"scoringItems": [
+      {"statId": 3, "points": 0.04},
+      {"statId": 4, "points": 4},
+      {"statId": 53, "points": 1, "pointsOverrides": {"6": 1.5}},
+      {"statId": 80, "points": 3},
+      {"statId": 92, "points": 1}
+    ]}
+  },
+  "members": [{"id": "{AAA}", "displayName": "varun"}, {"id": "{BBB}", "displayName": "alex"}],
+  "teams": [
+    {"id": 1, "name": "Team Varun", "owners": ["{AAA}"], "roster": {"entries": [
+      {"playerId": 4262921, "lineupSlotId": 20, "playerPoolEntry": {"player": {"fullName": "Justin Jefferson", "defaultPositionId": 3, "proTeamId": 16}}},
+      {"playerId": -16012, "lineupSlotId": 16, "playerPoolEntry": {"player": {"fullName": "Chiefs D/ST", "defaultPositionId": 16, "proTeamId": 12}}},
+      {"playerId": 3139477, "lineupSlotId": 0, "playerPoolEntry": {"player": {"fullName": "Patrick Mahomes", "defaultPositionId": 1, "proTeamId": 12}}},
+      {"playerId": 9999999, "lineupSlotId": 21, "playerPoolEntry": {"player": {"fullName": "Rookie Guy", "defaultPositionId": 2, "proTeamId": 0}}}
+    ]}},
+    {"id": 2, "location": "Alex's", "nickname": "Aces", "owners": ["{BBB}"], "roster": {"entries": []}}
+  ],
+  "schedule": [
+    {"matchupPeriodId": 2, "home": {"teamId": 1, "totalPoints": 90}, "away": {"teamId": 2, "totalPoints": 80}},
+    {"matchupPeriodId": 3,
+      "home": {"teamId": 2, "totalPoints": 101.2, "rosterForCurrentScoringPeriod": {"entries": []}},
+      "away": {"teamId": 1, "totalPoints": 120.5, "rosterForCurrentScoringPeriod": {"entries": [
+        {"playerId": 3139477, "lineupSlotId": 0, "playerPoolEntry": {"player": {"fullName": "Patrick Mahomes", "defaultPositionId": 1, "proTeamId": 12}}}
+      ]}}},
+    {"matchupPeriodId": 3, "home": {"teamId": 3, "totalPoints": 0}}
+  ]
+}
