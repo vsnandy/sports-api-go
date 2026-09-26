@@ -36,6 +36,7 @@ dist/
 
 # Terraform
 deploy/terraform/.terraform/
+deploy/bootstrap/.terraform/
 *.tfstate
 *.tfstate.*
 *.tfvars
