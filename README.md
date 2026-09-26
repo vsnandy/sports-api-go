@@ -41,7 +41,7 @@ curl -H 'X-API-Key: dev' localhost:8080/v1/nfl/leagues
    ```
 2. `cp deploy/terraform/terraform.tfvars.example deploy/terraform/terraform.tfvars` and fill it in.
 3. `terraform -chdir=deploy/terraform init`, then `make deploy`.
-4. Smoke test:
+4. Smoke test (requires `curl` and `jq`):
    ```bash
    API_URL=$(terraform -chdir=deploy/terraform output -raw api_url) \
    API_KEY=$(aws ssm get-parameter --name /sports-api/api-key --with-decryption --query Parameter.Value --output text) \
@@ -53,6 +53,11 @@ curl -H 'X-API-Key: dev' localhost:8080/v1/nfl/leagues
 A `502` with code `espn_auth_failed` (or an `espn_leagues_unavailable` warning) means the
 cookies expired. Update them with `aws ssm put-parameter --overwrite ...`, then force a
 cold start: `aws lambda update-function-configuration --function-name sports-api --description "rotated $(date +%F)"`.
+
+That `--description` change is not managed by Terraform, so the next `terraform apply`
+will show it as drift and reset the description to whatever Terraform has configured
+(or none). This is harmless -- it doesn't affect the running function -- but expect to
+see it in the plan.
 
 ## Test
 
