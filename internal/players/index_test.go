@@ -133,6 +133,19 @@ func TestStaleStoreRefetches(t *testing.T) {
 	}
 }
 
+func TestStaleStoreServesOnSourceError(t *testing.T) {
+	h := newHarness()
+	h.seedStore(t, 25*time.Hour)
+	h.src.err = errors.New("sleeper down")
+	got := mustGet(t, h.ix, "6794")
+	if got.Name != "Justin Jefferson" {
+		t.Fatalf("got %+v, want stale S3 data served", got)
+	}
+	if h.src.calls.Load() != 1 {
+		t.Fatalf("calls = %d, want 1 (source attempted, then fell back to stale S3 data)", h.src.calls.Load())
+	}
+}
+
 func TestStoreReadErrorFallsBack(t *testing.T) {
 	h := newHarness()
 	h.store.getErr = errors.New("AccessDenied")
@@ -171,6 +184,38 @@ func TestRefreshFailureServesStale(t *testing.T) {
 	h.now = h.now.Add(25 * time.Hour)
 	h.src.err = errors.New("sleeper down")
 	mustGet(t, h.ix, "4046")
+}
+
+func TestFailedRefreshBacksOffFiveMinutes(t *testing.T) {
+	h := newHarness()
+	mustGet(t, h.ix, "4046")
+	if h.src.calls.Load() != 1 {
+		t.Fatalf("calls = %d, want 1 after initial load", h.src.calls.Load())
+	}
+
+	// Advance past maxAge and make both S3 and the source fail, so the refresh
+	// genuinely fails and falls back to the in-memory snapshot.
+	h.now = h.now.Add(25 * time.Hour)
+	h.store.getErr = errors.New("s3 timeout")
+	h.src.err = errors.New("sleeper down")
+	mustGet(t, h.ix, "4046")
+	if h.src.calls.Load() != 2 {
+		t.Fatalf("calls = %d, want 2 after failed refresh", h.src.calls.Load())
+	}
+
+	// Within the 5 minute backoff window, don't attempt another load.
+	h.now = h.now.Add(4 * time.Minute)
+	mustGet(t, h.ix, "4046")
+	if h.src.calls.Load() != 2 {
+		t.Fatalf("calls = %d, want 2 (still backing off)", h.src.calls.Load())
+	}
+
+	// After 5 minutes, retry.
+	h.now = h.now.Add(2 * time.Minute)
+	mustGet(t, h.ix, "4046")
+	if h.src.calls.Load() != 3 {
+		t.Fatalf("calls = %d, want 3 (backoff elapsed, retried)", h.src.calls.Load())
+	}
 }
 
 func TestInitialFailureThenRetry(t *testing.T) {

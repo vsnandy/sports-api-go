@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	storeKey = "players/nfl.json"
-	maxAge   = 24 * time.Hour
+	storeKey       = "players/nfl.json"
+	maxAge         = 24 * time.Hour
+	refreshBackoff = 5 * time.Minute
 )
 
 type Source interface {
@@ -56,8 +57,9 @@ type Index struct {
 	store Store
 	now   func() time.Time
 
-	mu   sync.Mutex
-	snap *snapshot
+	mu          sync.Mutex
+	snap        *snapshot
+	nextAttempt time.Time // zero unless a refresh recently failed
 }
 
 func New(src Source, store Store, now func() time.Time) *Index {
@@ -111,20 +113,27 @@ func (ix *Index) snapshot(ctx context.Context) (*snapshot, error) {
 	if ix.snap != nil && ix.now().Sub(ix.snap.loadedAt) < maxAge {
 		return ix.snap, nil
 	}
+	if ix.snap != nil && ix.now().Before(ix.nextAttempt) {
+		return ix.snap, nil
+	}
 	s, err := ix.load(ctx)
 	if err != nil {
 		if ix.snap != nil {
+			ix.nextAttempt = ix.now().Add(refreshBackoff)
 			slog.WarnContext(ctx, "players refresh failed; serving stale index", "err", err)
 			return ix.snap, nil
 		}
 		return nil, err
 	}
 	ix.snap = s
+	ix.nextAttempt = time.Time{}
 	return s, nil
 }
 
 func (ix *Index) load(ctx context.Context) (*snapshot, error) {
 	data, mod, err := ix.store.Get(ctx, storeKey)
+	var stale []domain.Player
+	haveStale := false
 	switch {
 	case err == nil && ix.now().Sub(mod) < maxAge:
 		var slim []slimPlayer
@@ -132,12 +141,24 @@ func (ix *Index) load(ctx context.Context) (*snapshot, error) {
 			return build(fromSlim(slim), mod), nil
 		}
 		slog.WarnContext(ctx, "players cache is corrupt; refetching")
-	case err != nil && !errors.Is(err, domain.ErrNotFound):
+	case err == nil:
+		// Stale, but keep it in case the source is also unavailable.
+		var slim []slimPlayer
+		if err := json.Unmarshal(data, &slim); err == nil {
+			stale, haveStale = fromSlim(slim), true
+		} else {
+			slog.WarnContext(ctx, "players cache is corrupt; refetching")
+		}
+	case !errors.Is(err, domain.ErrNotFound):
 		slog.WarnContext(ctx, "players cache read failed; refetching", "err", err)
 	}
 
 	ps, err := ix.src.Players(ctx)
 	if err != nil {
+		if haveStale {
+			slog.WarnContext(ctx, "players source failed; serving stale S3 snapshot", "err", err)
+			return build(stale, mod), nil
+		}
 		return nil, err
 	}
 	if data, err := json.Marshal(toSlim(ps)); err == nil {

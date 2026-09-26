@@ -24,7 +24,12 @@ import (
 	"github.com/vsnandy/sports-api-go/internal/service"
 )
 
-const upstreamTimeout = 5 * time.Second
+const (
+	upstreamTimeout = 5 * time.Second
+	// playersTimeout is longer than upstreamTimeout because the Sleeper /players/nfl
+	// dump is ~5MB and can be slow; still comfortably under the 15s Lambda timeout.
+	playersTimeout = 10 * time.Second
+)
 
 func main() {
 	slog.SetDefault(slog.New(httpapi.NewLogHandler(slog.NewJSONHandler(os.Stdout, nil))))
@@ -75,7 +80,8 @@ func build(ctx context.Context) (http.Handler, config.Config, error) {
 	if cfg.PlayersBucket != "" {
 		store = players.S3Store{Client: s3Client, Bucket: cfg.PlayersBucket}
 	}
-	idx := players.New(sl, store, time.Now)
+	playersSrc := sleeper.New(httpx.New("sleeper", playersTimeout), sleeper.DefaultAPIBase, sleeper.DefaultStatsBase, cfg.SleeperUsername)
+	idx := players.New(playersSrc, store, time.Now)
 
 	svc := service.New(providers, sl, sl, idx, time.Now)
 	return httpapi.NewHandler(svc, cfg.APIKey), cfg, nil
