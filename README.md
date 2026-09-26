@@ -86,7 +86,7 @@ Actions signs in to AWS with GitHub OIDC; no AWS keys are stored in GitHub.
    | `ESPN_LEAGUE_IDS` | JSON list, e.g. `["123456"]` (`[]` or unset for none) |
 
 6. Open a PR to check the plan, then merge it to `main`. The first deploy and smoke test run in Actions;
-   the API URL is in the deploy job log (`terraform output`) or via `terraform output -raw api_url` after `make tf-init`.
+   the API URL is in the deploy job log (`terraform output`) or via `terraform -chdir=deploy/terraform output -raw api_url` after `make tf-init`.
 
 The CI roles trust GitHub's default OIDC subject (`repo:<owner>/<repo>:pull_request` for PRs, `repo:<owner>/<repo>:ref:refs/heads/main` for deploys). Don't customize the repository's OIDC subject claim or add a GitHub `environment:` to the workflow jobs without updating the trust policies in `deploy/bootstrap/iam.tf`, or role assumption fails with AccessDenied.
 
