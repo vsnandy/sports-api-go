@@ -48,6 +48,8 @@ func newTestClient(t *testing.T, s2 string, leagueIDs ...string) (*Client, *reco
 		case "/seasons/2026/segments/0/leagues/777":
 			w.Header().Set("Content-Type", "text/html")
 			fmt.Fprint(w, "<html>please log in</html>")
+		case "/seasons/2026/segments/0/leagues/888":
+			fmt.Fprint(w, `{"settings": "oops"}`)
 		default:
 			http.NotFound(w, r)
 		}
@@ -170,6 +172,17 @@ func TestAuthFailures(t *testing.T) {
 	bad, _ := newTestClient(t, "WRONG", "123456")
 	if _, err := bad.ListLeagues(ctx, 2026); !errors.Is(err, domain.ErrESPNAuth) {
 		t.Errorf("wrong cookie: err = %v, want ErrESPNAuth", err)
+	}
+}
+
+func TestWrongShapeBodyIsNotAuthFailure(t *testing.T) {
+	c, _ := newTestClient(t, "S2")
+	_, err := c.League(context.Background(), "888", 2026)
+	if err == nil {
+		t.Fatal("want an error for the malformed body")
+	}
+	if errors.Is(err, domain.ErrESPNAuth) {
+		t.Fatalf("err = %v, want a decode error, not ErrESPNAuth", err)
 	}
 }
 

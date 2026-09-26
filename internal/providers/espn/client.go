@@ -4,6 +4,7 @@ package espn
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -44,14 +45,22 @@ func (c *Client) fetch(ctx context.Context, nativeID string, season, week int, v
 	return &l, nil
 }
 
-// classifyAuth turns ESPN's ways of rejecting cookies (401/403, or a 2xx HTML login
-// page) into ErrESPNAuth.
+// classifyAuth turns ESPN's ways of rejecting cookies (401/403, or a 2xx body that
+// is not JSON at all, like an HTML login page) into ErrESPNAuth. A 2xx body that is
+// valid JSON of the wrong shape is a real decode error, not an auth failure.
 func classifyAuth(err error) error {
 	var ue *domain.UpstreamError
-	if errors.As(err, &ue) && (ue.Status == http.StatusUnauthorized || ue.Status == http.StatusForbidden || ue.BadBody) {
+	if errors.As(err, &ue) && (ue.Status == http.StatusUnauthorized || ue.Status == http.StatusForbidden || (ue.BadBody && isNotJSON(ue.Err))) {
 		return fmt.Errorf("%w (%v)", domain.ErrESPNAuth, err)
 	}
 	return err
+}
+
+// isNotJSON reports whether err is a JSON syntax error, i.e. the body did not
+// even parse as JSON (as opposed to parsing into the wrong shape).
+func isNotJSON(err error) bool {
+	var se *json.SyntaxError
+	return errors.As(err, &se)
 }
 
 // ListLeagues returns the configured leagues that exist for season.
