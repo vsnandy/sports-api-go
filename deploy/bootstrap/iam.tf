@@ -44,7 +44,7 @@ locals {
       { Sid = "StateList", Effect = "Allow", Action = ["s3:ListBucket"], Resource = [local.state_arn] },
       { Sid = "StateRead", Effect = "Allow", Action = ["s3:GetObject"], Resource = ["${local.state_arn}/sports-api/*"] },
       { Sid = "PlayersBucketRead", Effect = "Allow", Action = ["s3:Get*", "s3:List*"], Resource = [local.players_arn] },
-      { Sid = "LambdaRead", Effect = "Allow", Action = ["lambda:Get*", "lambda:List*"], Resource = [local.lambda_arn] },
+      { Sid = "LambdaRead", Effect = "Allow", Action = ["lambda:Get*", "lambda:List*"], Resource = [local.lambda_arn, "${local.lambda_arn}:*"] },
       { Sid = "ApiGatewayRead", Effect = "Allow", Action = ["apigateway:GET"], Resource = local.apigw_arns },
       {
         Sid      = "LambdaRoleRead"
@@ -76,7 +76,7 @@ locals {
           "lambda:CreateFunction", "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration", "lambda:DeleteFunction",
           "lambda:AddPermission", "lambda:RemovePermission", "lambda:TagResource", "lambda:UntagResource",
         ]
-        Resource = [local.lambda_arn]
+        Resource = [local.lambda_arn, "${local.lambda_arn}:*"]
       },
       # API Gateway authorizes by HTTP verb; tagging is POST/DELETE on /tags/*.
       { Sid = "ApiGatewayManage", Effect = "Allow", Action = ["apigateway:POST", "apigateway:PUT", "apigateway:PATCH", "apigateway:DELETE"], Resource = local.apigw_arns },

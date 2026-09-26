@@ -95,6 +95,28 @@ run "boundary_scopes_ssm_to_prefix" {
   }
 }
 
+run "lambda_statements_cover_qualified_arn" {
+  command = plan
+  assert {
+    condition = one([
+      for s in jsondecode(aws_iam_policy.read.policy).Statement : s if s.Sid == "LambdaRead"
+    ]).Resource == [
+      "arn:aws:lambda:us-east-1:123456789012:function:sports-api",
+      "arn:aws:lambda:us-east-1:123456789012:function:sports-api:*",
+    ]
+    error_message = "LambdaRead must also cover the qualified ARN (version/alias) or calls against it are denied"
+  }
+  assert {
+    condition = one([
+      for s in jsondecode(aws_iam_policy.deploy.policy).Statement : s if s.Sid == "LambdaManage"
+    ]).Resource == [
+      "arn:aws:lambda:us-east-1:123456789012:function:sports-api",
+      "arn:aws:lambda:us-east-1:123456789012:function:sports-api:*",
+    ]
+    error_message = "LambdaManage must also cover the qualified ARN (version/alias) or calls against it are denied"
+  }
+}
+
 run "existing_oidc_provider_is_not_created" {
   command = plan
   variables {
