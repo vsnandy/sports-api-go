@@ -90,6 +90,33 @@ Actions signs in to AWS with GitHub OIDC; no AWS keys are stored in GitHub.
 
 The CI roles trust GitHub's default OIDC subject (`repo:<owner>/<repo>:pull_request` for PRs, `repo:<owner>/<repo>:ref:refs/heads/main` for deploys). Don't customize the repository's OIDC subject claim or add a GitHub `environment:` to the workflow jobs without updating the trust policies in `deploy/bootstrap/iam.tf`, or role assumption fails with AccessDenied.
 
+### Changing CI permissions
+
+Bootstrap state now lives in the state bucket, so a fresh clone needs `-backend-config` to find
+it. To grant a role more (or less) access:
+
+1. Edit `deploy/bootstrap/iam.tf`.
+2. ```bash
+   terraform -chdir=deploy/bootstrap init -backend-config="bucket=<state bucket>" -backend-config="region=<region>"
+   terraform -chdir=deploy/bootstrap apply
+   ```
+3. Re-run the failed Actions job.
+
+This is also how you fix an `AccessDenied` from the first `plan` or `deploy` run: the CI roles
+usually just need a policy update in `iam.tf`, applied the same way.
+
+### Stale state lock
+
+A cancelled or killed deploy can leave `sports-api/terraform.tfstate.tflock` in the state bucket,
+which blocks the next plan/apply. With your own (owner) AWS credentials:
+
+```bash
+TF_STATE_BUCKET=<state bucket> AWS_REGION=<region> make tf-init
+terraform -chdir=deploy/terraform force-unlock <LOCK_ID>
+```
+
+`<LOCK_ID>` is printed in the failed job's error message.
+
 ### Break-glass local deploy
 
 ```bash
