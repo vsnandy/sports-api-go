@@ -1,0 +1,5 @@
+{
+  "4046": {"player_id": "4046", "full_name": "Patrick Mahomes", "position": "QB", "team": "KC", "espn_id": 3139477},
+  "KC": {"player_id": "KC", "first_name": "Kansas City", "last_name": "Chiefs", "position": "DEF", "team": "KC", "espn_id": null},
+  "6794": {"player_id": "6794", "full_name": "Justin Jefferson", "position": "WR", "team": "MIN", "espn_id": "4262921"}
+}

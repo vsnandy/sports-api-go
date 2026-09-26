@@ -1,0 +1,5 @@
+{
+  "league_id": "111", "name": "Dynasty Bros", "season": "2026", "sport": "nfl",
+  "scoring_settings": {"pass_yd": 0.04, "pass_td": 4, "rec": 1, "rec_yd": 0.1, "rec_td": 6, "rush_yd": 0.1, "rush_td": 6},
+  "roster_positions": ["QB", "RB", "WR", "FLEX", "DEF", "BN", "BN"]
+}

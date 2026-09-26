@@ -202,7 +202,7 @@ Lambda detection: `cmd/api` checks `AWS_LAMBDA_FUNCTION_NAME`; if set, it runs t
 - `GET https://api.sleeper.app/v1/league/{league_id}/users` and `/rosters`
 - `GET https://api.sleeper.app/v1/league/{league_id}/matchups/{week}`
 - `GET https://api.sleeper.app/v1/players/nfl` — players dump (≤ once/day)
-- `GET https://api.sleeper.com/stats/nfl/regular/{season}/{week}` — weekly stats, all players (unofficial)
+- `GET https://api.sleeper.com/stats/nfl/{season}/{week}?season_type=regular` — weekly stats, all players, array of `{player_id, week, opponent, stats}` (unofficial)
 - `GET https://api.sleeper.com/stats/nfl/player/{player_id}?season_type=regular&season={season}&grouping=week` — player game log (unofficial)
 
 ### ESPN (cookie auth: `espn_s2`, `SWID`)
