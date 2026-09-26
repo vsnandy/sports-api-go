@@ -1,0 +1,3 @@
+sleeper_username = "your-sleeper-username"
+espn_league_ids  = ["123456"]
+# region = "us-east-1"
