@@ -49,3 +49,12 @@ func TestPresets(t *testing.T) {
 		t.Fatal("Preset must return a fresh copy")
 	}
 }
+
+func TestTwoPointConversions(t *testing.T) {
+	// Test that 2pt conversion stats are correctly scored in presets
+	rules, _ := Preset("std")
+	stats := map[string]float64{"pass_2pt": 1, "rush_2pt": 1, "rec_2pt": 1}
+	if got := Points(stats, rules); got != 6 {
+		t.Fatalf("2pt conversions = %v, want 6", got)
+	}
+}

@@ -21,9 +21,9 @@ func Points(stats map[string]float64, rules domain.ScoringRules) float64 {
 
 // base is standard (non-PPR) scoring in Sleeper stat keys.
 var base = domain.ScoringRules{
-	"pass_yd": 0.04, "pass_td": 4, "pass_int": -2, "pass_2bt": 2,
-	"rush_yd": 0.1, "rush_td": 6, "rush_2bt": 2,
-	"rec_yd": 0.1, "rec_td": 6, "rec_2bt": 2,
+	"pass_yd": 0.04, "pass_td": 4, "pass_int": -2, "pass_2pt": 2,
+	"rush_yd": 0.1, "rush_td": 6, "rush_2pt": 2,
+	"rec_yd": 0.1, "rec_td": 6, "rec_2pt": 2,
 	"fum_lost": -2,
 	"fgm_0_19": 3, "fgm_20_29": 3, "fgm_30_39": 3, "fgm_40_49": 4, "fgm_50p": 5,
 	"fgmiss": -1, "xpm": 1, "xpmiss": -1,
