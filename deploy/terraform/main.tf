@@ -75,14 +75,11 @@ data "aws_iam_policy_document" "api" {
     resources = ["${aws_s3_bucket.players.arn}/players/*"]
   }
   # Without ListBucket, GetObject on a missing key returns AccessDenied instead of NoSuchKey.
+  # The bucket is private and single-purpose, so this isn't scoped further: a prefix
+  # condition on ListBucket isn't reliably evaluated for the 404-vs-403 decision on GetObject.
   statement {
     actions   = ["s3:ListBucket"]
     resources = [aws_s3_bucket.players.arn]
-    condition {
-      test     = "StringLike"
-      variable = "s3:prefix"
-      values   = ["players/*"]
-    }
   }
   statement {
     actions   = ["logs:CreateLogStream", "logs:PutLogEvents"]
