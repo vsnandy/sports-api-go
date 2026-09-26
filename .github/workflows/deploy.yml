@@ -15,7 +15,10 @@ env:
   TF_IN_AUTOMATION: "true"
   AWS_REGION: ${{ vars.AWS_REGION }}
   TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
-  SSM_PREFIX: ${{ vars.SSM_PREFIX || '/sports-api/' }}
+  # Must match bootstrap's ssm_prefix and the stack's ssm_*_param defaults; only the
+  # smoke test reads this, so a repository-variable override would silently drift
+  # from the Lambda's actual parameter path.
+  SSM_PREFIX: "/sports-api/"
   TF_VAR_region: ${{ vars.AWS_REGION }}
   TF_VAR_sleeper_username: ${{ vars.SLEEPER_USERNAME }}
   TF_VAR_espn_league_ids: ${{ vars.ESPN_LEAGUE_IDS || '[]' }}
