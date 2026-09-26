@@ -32,21 +32,82 @@ curl -H 'X-API-Key: dev' localhost:8080/v1/nfl/leagues
 
 ## Deploy
 
-1. Create secrets (once; they never enter Terraform state). `espn_s2` and `SWID` are
+Deploys run in GitHub Actions (`.github/workflows/deploy.yml`):
+
+- **Pull requests:** tests, then `terraform plan` (shown on the run's summary page).
+- **Merge to `main`:** tests, `terraform apply`, then the smoke test.
+- **Actions → deploy → Run workflow:** redeploy `main`, e.g. after changing a repository variable.
+
+Actions signs in to AWS with GitHub OIDC; no AWS keys are stored in GitHub.
+
+### One-time setup
+
+1. Install Terraform 1.10 or newer: `brew install hashicorp/tap/terraform`.
+2. Create the secrets in SSM (once; they never enter Terraform state or GitHub). `espn_s2` and `SWID` are
    cookies from a logged-in espn.com session; keep the braces in `SWID`.
    ```bash
    aws ssm put-parameter --name /sports-api/api-key   --type SecureString --value "$(openssl rand -hex 32)"
    aws ssm put-parameter --name /sports-api/espn-s2   --type SecureString --value '<espn_s2>'
    aws ssm put-parameter --name /sports-api/espn-swid --type SecureString --value '{<SWID>}'
    ```
-2. `cp deploy/terraform/terraform.tfvars.example deploy/terraform/terraform.tfvars` and fill it in.
-3. `terraform -chdir=deploy/terraform init`, then `make deploy`.
-4. Smoke test (requires `curl` and `jq`):
+   Keep every parameter under `/sports-api/`: the Lambda's permissions boundary only allows that path.
+3. Create the state bucket, GitHub OIDC provider, and CI roles with your own admin credentials:
    ```bash
-   API_URL=$(terraform -chdir=deploy/terraform output -raw api_url) \
-   API_KEY=$(aws ssm get-parameter --name /sports-api/api-key --with-decryption --query Parameter.Value --output text) \
-   make smoke
+   terraform -chdir=deploy/bootstrap init
+   terraform -chdir=deploy/bootstrap apply
    ```
+   If this AWS account already has a GitHub OIDC provider, add `-var create_oidc_provider=false`.
+4. Move the bootstrap state into the new bucket so your laptop isn't the only copy:
+   ```bash
+   BUCKET=$(terraform -chdir=deploy/bootstrap output -raw state_bucket)
+   REGION=$(terraform -chdir=deploy/bootstrap output -raw region)
+   cat > deploy/bootstrap/backend.tf <<'EOF'
+   terraform {
+     backend "s3" {
+       key          = "bootstrap/terraform.tfstate"
+       use_lockfile = true
+       encrypt      = true
+     }
+   }
+   EOF
+   terraform -chdir=deploy/bootstrap init -migrate-state \
+     -backend-config="bucket=$BUCKET" -backend-config="region=$REGION"
+   ```
+   Answer `yes` to copy the state, then commit `deploy/bootstrap/backend.tf`.
+5. In GitHub, go to **Settings → Secrets and variables → Actions → Variables** and add:
+
+   | Variable | Value |
+   |---|---|
+   | `AWS_REGION` | `us-east-1` (or the region you bootstrapped) |
+   | `TF_STATE_BUCKET` | `terraform -chdir=deploy/bootstrap output -raw state_bucket` |
+   | `AWS_PLAN_ROLE_ARN` | `terraform -chdir=deploy/bootstrap output -raw plan_role_arn` |
+   | `AWS_DEPLOY_ROLE_ARN` | `terraform -chdir=deploy/bootstrap output -raw deploy_role_arn` |
+   | `SLEEPER_USERNAME` | your Sleeper username |
+   | `ESPN_LEAGUE_IDS` | JSON list, e.g. `["123456"]` (`[]` or unset for none) |
+
+6. Open a PR to check the plan, then merge it to `main`. The first deploy and smoke test run in Actions;
+   the API URL is in the deploy job log (`terraform output`) or via `terraform output -raw api_url` after `make tf-init`.
+
+The CI roles trust GitHub's default OIDC subject (`repo:<owner>/<repo>:pull_request` for PRs, `repo:<owner>/<repo>:ref:refs/heads/main` for deploys). Don't customize the repository's OIDC subject claim or add a GitHub `environment:` to the workflow jobs without updating the trust policies in `deploy/bootstrap/iam.tf`, or role assumption fails with AccessDenied.
+
+### Break-glass local deploy
+
+```bash
+export TF_STATE_BUCKET=<state bucket> AWS_REGION=us-east-1
+cp deploy/terraform/terraform.tfvars.example deploy/terraform/terraform.tfvars   # fill it in
+make tf-init
+make deploy
+```
+
+### Smoke test by hand
+
+Requires `curl` and `jq`:
+
+```bash
+API_URL=$(terraform -chdir=deploy/terraform output -raw api_url) \
+API_KEY=$(aws ssm get-parameter --name /sports-api/api-key --with-decryption --query Parameter.Value --output text) \
+make smoke
+```
 
 ## Rotating ESPN cookies
 
