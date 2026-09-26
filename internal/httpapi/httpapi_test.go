@@ -1,10 +1,12 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -174,6 +176,7 @@ func TestErrorMapping(t *testing.T) {
 		{fmt.Errorf("%w (upstream espn status 401)", domain.ErrESPNAuth), 502, "espn_auth_failed"},
 		{fmt.Errorf("sleeper /x: %w", domain.ErrUpstreamTimeout), 504, "upstream_timeout"},
 		{&domain.UpstreamError{Provider: "sleeper", Status: 500}, 502, "upstream_error"},
+		{fmt.Errorf("sleeper /x: %w", context.Canceled), 500, "internal"},
 		{errors.New("surprise"), 500, "internal"},
 	}
 	for _, tt := range tests {
@@ -181,6 +184,40 @@ func TestErrorMapping(t *testing.T) {
 		if rec.Code != tt.status || errCode(t, rec) != tt.code {
 			t.Errorf("%v: got %d %s", tt.err, rec.Code, rec.Body)
 		}
+	}
+}
+
+func TestClientDisconnectLogsAtWarnNotError(t *testing.T) {
+	var buf bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&buf, nil)))
+	defer slog.SetDefault(old)
+
+	canceledErr := fmt.Errorf("sleeper /x: %w", context.Canceled)
+	rec := do(NewHandler(&fakeService{err: canceledErr}, key), "/v1/nfl/leagues", key)
+	if rec.Code != 500 || errCode(t, rec) != "internal" {
+		t.Fatalf("status/code = %d %s, want 500 internal", rec.Code, errCode(t, rec))
+	}
+
+	var sawWarn, sawError bool
+	dec := json.NewDecoder(&buf)
+	for dec.More() {
+		var line map[string]any
+		if err := dec.Decode(&line); err != nil {
+			break
+		}
+		if line["msg"] != "request failed" {
+			continue
+		}
+		switch line["level"] {
+		case "WARN":
+			sawWarn = true
+		case "ERROR":
+			sawError = true
+		}
+	}
+	if !sawWarn || sawError {
+		t.Fatalf("want a WARN log for a canceled client, not ERROR (warn=%v error=%v, log=%s)", sawWarn, sawError, buf.String())
 	}
 }
 

@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -42,7 +43,11 @@ func respond(w http.ResponseWriter, r *http.Request, data any, meta domain.Meta,
 
 func writeError(w http.ResponseWriter, r *http.Request, err error) {
 	status, code, msg := classify(err)
-	if status >= 500 {
+	switch {
+	case errors.Is(err, context.Canceled):
+		// The client is already gone and won't see this response; not worth an alert.
+		slog.WarnContext(r.Context(), "request failed", "status", status, "code", code, "err", err)
+	case status >= 500:
 		slog.ErrorContext(r.Context(), "request failed", "status", status, "code", code, "err", err)
 	}
 	writeJSON(w, status, errorEnvelope{Error: apiError{Code: code, Message: msg}})

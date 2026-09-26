@@ -44,6 +44,10 @@ func (c *Client) GetJSON(ctx context.Context, url string, header http.Header, ou
 		if isTimeout(err) {
 			return fmt.Errorf("%s %s: %w", c.provider, req.URL.Path, domain.ErrUpstreamTimeout)
 		}
+		if errors.Is(err, context.Canceled) {
+			// The client disconnected; this isn't an upstream failure.
+			return fmt.Errorf("%s %s: %w", c.provider, req.URL.Path, err)
+		}
 		return &domain.UpstreamError{Provider: c.provider, Err: err}
 	}
 	defer resp.Body.Close()

@@ -67,4 +67,16 @@ func TestGetJSON(t *testing.T) {
 			t.Fatalf("err = %v, want ErrUpstreamTimeout", err)
 		}
 	})
+	t.Run("canceled context is not an upstream error", func(t *testing.T) {
+		cctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		var ue *domain.UpstreamError
+		err := c.GetJSON(cctx, srv.URL+"/ok", nil, &struct{}{})
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
+		if errors.As(err, &ue) {
+			t.Fatalf("err = %v, want it not to classify as an UpstreamError", err)
+		}
+	})
 }
