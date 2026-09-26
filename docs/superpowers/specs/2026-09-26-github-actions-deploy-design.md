@@ -127,10 +127,10 @@ The read policy grants no SSM or KMS access, so the plan role cannot read secret
 | S3 (players) | `s3:CreateBucket`, `s3:DeleteBucket`, `s3:PutBucket*`, `s3:PutEncryptionConfiguration`, `s3:PutLifecycleConfiguration` | `arn:aws:s3:::sports-api-players-*` |
 | S3 (players objects, for `force_destroy`) | `s3:ListBucketVersions`, `s3:DeleteObject`, `s3:DeleteObjectVersion` | bucket and `/*` |
 | Lambda | `lambda:CreateFunction`, `lambda:UpdateFunctionCode`, `lambda:UpdateFunctionConfiguration`, `lambda:DeleteFunction`, `lambda:AddPermission`, `lambda:RemovePermission`, `lambda:TagResource`, `lambda:UntagResource` | function `sports-api` |
-| API Gateway | `apigateway:POST`, `apigateway:PUT`, `apigateway:PATCH`, `apigateway:DELETE`, `apigateway:TagResource` | `/apis`, `/apis/*`, `/tags/*` in `<region>` |
+| API Gateway | `apigateway:POST`, `apigateway:PUT`, `apigateway:PATCH`, `apigateway:DELETE` (tagging is POST/DELETE on `/tags/*`) | `/apis`, `/apis/*`, `/tags/*` in `<region>` |
 | Logs | `logs:CreateLogGroup`, `logs:DeleteLogGroup`, `logs:PutRetentionPolicy`, `logs:DeleteRetentionPolicy`, `logs:TagResource`, `logs:UntagResource`, `logs:TagLogGroup` | log group `/aws/lambda/sports-api` (and `:*`) |
 | IAM | `iam:CreateRole`, `iam:PutRolePermissionsBoundary`, `iam:PutRolePolicy`, `iam:DeleteRolePolicy` | role `sports-api-lambda`, **Condition** `iam:PermissionsBoundary = arn:aws:iam::<acct>:policy/sports-api-lambda-boundary` |
-| IAM | `iam:DeleteRole`, `iam:UpdateAssumeRolePolicy`, `iam:TagRole`, `iam:UntagRole` | role `sports-api-lambda` |
+| IAM | `iam:DeleteRole`, `iam:UpdateAssumeRolePolicy`, `iam:TagRole`, `iam:UntagRole`, `iam:ListInstanceProfilesForRole` | role `sports-api-lambda` |
 | IAM | `iam:PassRole` | role `sports-api-lambda`, Condition `iam:PassedToService = lambda.amazonaws.com` |
 | IAM (Deny) | `iam:DeleteRolePermissionsBoundary` | role `sports-api-lambda` |
 | SSM | `ssm:GetParameter` | `arn:aws:ssm:<region>:<acct>:parameter<ssm_prefix>api-key` |
@@ -175,6 +175,9 @@ permissions:
 **`test`** (all triggers)
 1. `actions/checkout@v4`; `actions/setup-go@v5` with `go-version-file: go.mod`
 2. `test -z "$(gofmt -l .)"`; `go vet ./...`; `go test -race ./...`
+3. `./scripts/test-ci-scripts.sh` (tests for the workflow's helper scripts)
+4. `terraform fmt -check -recursive deploy`; `terraform test` for `deploy/bootstrap` and
+   `deploy/terraform` (both `init -backend=false`, `mock_provider "aws"`, no AWS credentials)
 
 **`plan`** (`pull_request` only; `needs: test`;
 `if: github.event.pull_request.head.repo.full_name == github.repository`)
