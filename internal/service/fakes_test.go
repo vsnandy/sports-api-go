@@ -58,11 +58,12 @@ func (f *fakeProvider) Matchups(context.Context, string, int, int, []string) ([]
 }
 
 type fakeStats struct {
-	mu        sync.Mutex
-	week      map[string]domain.StatLine
-	weekErr   error
-	gamelog   []domain.StatLine
-	weekCalls int
+	mu           sync.Mutex
+	week         map[string]domain.StatLine
+	weekErr      error
+	gamelog      []domain.StatLine
+	weekCalls    int
+	gamelogCalls int
 }
 
 func (f *fakeStats) WeekStats(context.Context, int, int) (map[string]domain.StatLine, error) {
@@ -73,31 +74,50 @@ func (f *fakeStats) WeekStats(context.Context, int, int) (map[string]domain.Stat
 }
 
 func (f *fakeStats) PlayerGamelog(context.Context, string, int) ([]domain.StatLine, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.gamelogCalls++
 	return f.gamelog, nil
 }
 
-type fakeState struct{ st domain.SeasonState }
-
-func (f *fakeState) State(context.Context) (domain.SeasonState, error) { return f.st, nil }
-
-type fakeIndex struct {
-	byID   map[string]domain.Player
-	byESPN map[string]string
+type fakeState struct {
+	mu    sync.Mutex
+	st    domain.SeasonState
+	calls int
 }
 
-func (f fakeIndex) Get(_ context.Context, id string) (domain.Player, bool, error) {
+func (f *fakeState) State(context.Context) (domain.SeasonState, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	return f.st, nil
+}
+
+type fakeIndex struct {
+	mu       sync.Mutex
+	byID     map[string]domain.Player
+	byESPN   map[string]string
+	getCalls int
+}
+
+func (f *fakeIndex) Get(_ context.Context, id string) (domain.Player, bool, error) {
+	f.mu.Lock()
+	f.getCalls++
+	f.mu.Unlock()
 	p, ok := f.byID[id]
 	return p, ok, nil
 }
 
-func (f fakeIndex) Resolve(ctx context.Context, ref domain.PlayerRef) (domain.Player, bool, error) {
+func (f *fakeIndex) Resolve(ctx context.Context, ref domain.PlayerRef) (domain.Player, bool, error) {
 	switch {
 	case ref.Platform == domain.PlatformSleeper:
 		return f.Get(ctx, ref.ID)
 	case ref.Position == "DEF":
 		return f.Get(ctx, ref.NFLTeam)
 	}
+	f.mu.Lock()
 	id, ok := f.byESPN[ref.ID]
+	f.mu.Unlock()
 	if !ok {
 		return domain.Player{}, false, nil
 	}
@@ -122,6 +142,7 @@ type fixture struct {
 	espn    *fakeProvider
 	stats   *fakeStats
 	state   *fakeState
+	index   *fakeIndex
 	now     time.Time
 }
 
@@ -173,7 +194,7 @@ func newFixture() *fixture {
 		},
 	}
 	f.state = &fakeState{st: domain.SeasonState{Season: 2026, Week: 3}}
-	idx := fakeIndex{
+	f.index = &fakeIndex{
 		byID: map[string]domain.Player{
 			"4046": player("4046", "Patrick Mahomes", "QB", "KC", map[string]string{"sleeper": "4046", "espn": "3139477"}),
 			"6794": player("6794", "Justin Jefferson", "WR", "MIN", map[string]string{"sleeper": "6794", "espn": "4262921"}),
@@ -181,6 +202,6 @@ func newFixture() *fixture {
 		},
 		byESPN: map[string]string{"3139477": "4046", "4262921": "6794"},
 	}
-	f.svc = New([]LeagueProvider{f.espn, f.sleeper}, f.stats, f.state, idx, func() time.Time { return f.now })
+	f.svc = New([]LeagueProvider{f.espn, f.sleeper}, f.stats, f.state, f.index, func() time.Time { return f.now })
 	return f
 }

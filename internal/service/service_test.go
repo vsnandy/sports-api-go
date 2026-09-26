@@ -250,6 +250,27 @@ func TestGamelogBadScoring(t *testing.T) {
 	wantInvalid(t, err, "scoring")
 }
 
+func TestGamelogInvalidScoringDoesNotCallUpstreams(t *testing.T) {
+	f := newFixture()
+	_, _, err := f.svc.Gamelog(ctx, "6794", 0, "espn:1/../2")
+	wantInvalid(t, err, "scoring")
+	if f.index.getCalls != 0 {
+		t.Errorf("index.Get calls = %d, want 0", f.index.getCalls)
+	}
+	if f.state.calls != 0 {
+		t.Errorf("state calls = %d, want 0", f.state.calls)
+	}
+	if f.stats.gamelogCalls != 0 {
+		t.Errorf("stats.PlayerGamelog calls = %d, want 0", f.stats.gamelogCalls)
+	}
+	if f.sleeper.Calls("list")+f.sleeper.Calls("league") != 0 {
+		t.Errorf("sleeper provider calls = %v, want none", f.sleeper.calls)
+	}
+	if f.espn.Calls("list")+f.espn.Calls("league") != 0 {
+		t.Errorf("espn provider calls = %v, want none", f.espn.calls)
+	}
+}
+
 func TestGamelogUnknownPlayer(t *testing.T) {
 	f := newFixture()
 	if _, _, err := f.svc.Gamelog(ctx, "0000", 0, "ppr"); !errors.Is(err, domain.ErrNotFound) {

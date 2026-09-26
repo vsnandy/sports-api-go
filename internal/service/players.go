@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/vsnandy/sports-api-go/internal/domain"
 	"github.com/vsnandy/sports-api-go/internal/scoring"
@@ -31,6 +30,9 @@ func (s *Service) player(ctx context.Context, id string) (domain.Player, error) 
 // Gamelog returns a player's weekly stat lines for season. scoringParam is "" (raw
 // stats), a preset name, or a league ID whose scoring rules apply.
 func (s *Service) Gamelog(ctx context.Context, playerID string, season int, scoringParam string) ([]domain.GamelogEntry, domain.Meta, error) {
+	if !validScoringSyntax(scoringParam) {
+		return nil, domain.Meta{}, &domain.InvalidParamError{Param: "scoring", Reason: "must be ppr, half, std, or a league id like espn:123456"}
+	}
 	if _, err := s.player(ctx, playerID); err != nil {
 		return nil, domain.Meta{}, err
 	}
@@ -65,15 +67,26 @@ func (s *Service) Gamelog(ctx context.Context, playerID string, season int, scor
 	return out, domain.Meta{Season: season, Warnings: warnings}, nil
 }
 
+// validScoringSyntax reports whether param is a well-formed scoring value: empty,
+// a preset name, or a syntactically valid league ID. It does not check that the
+// league exists or is owned by the caller.
+func validScoringSyntax(param string) bool {
+	if param == "" {
+		return true
+	}
+	if _, ok := scoring.Preset(param); ok {
+		return true
+	}
+	_, _, err := domain.ParseLeagueID(param)
+	return err == nil
+}
+
 func (s *Service) rulesFor(ctx context.Context, param string, season int) (domain.ScoringRules, []string, error) {
 	if param == "" {
 		return nil, nil, nil
 	}
 	if r, ok := scoring.Preset(param); ok {
 		return r, nil, nil
-	}
-	if !strings.Contains(param, ":") {
-		return nil, nil, &domain.InvalidParamError{Param: "scoring", Reason: "must be ppr, half, std, or a league id like espn:123456"}
 	}
 	_, _, league, err := s.resolveLeague(ctx, param, season)
 	if err != nil {
