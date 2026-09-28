@@ -25,6 +25,12 @@ var sample = []domain.Player{
 	p("4046", "Patrick Mahomes", "QB", "KC", "3139477"),
 	p("6794", "Justin Jefferson", "WR", "MIN", "4262921"),
 	p("KC", "Kansas City Chiefs", "DEF", "KC", ""),
+	// No espn_id in Sleeper's dump: ESPN refs must fall back to name + position + team.
+	p("9228", "Bryce Young", "QB", "CAR", ""),
+	p("8151", "Kenneth Walker III", "RB", "SEA", ""),
+	p("7547", "A.J. Brown", "WR", "PHI", ""),
+	p("2001", "Mike Williams", "WR", "NYJ", ""),
+	p("2002", "Mike Williams", "WR", "NYJ", ""),
 }
 
 type fakeSource struct {
@@ -271,5 +277,61 @@ func TestResolve(t *testing.T) {
 	}
 	if kc := mustGet(t, h.ix, "KC"); kc.PlatformIDs["espn"] != "" {
 		t.Errorf("Resolve must not mutate the index entry: %v", kc.PlatformIDs)
+	}
+}
+
+func TestResolveESPNByNameFallback(t *testing.T) {
+	h := newHarness()
+	ctx := context.Background()
+	espn := func(id, name, pos, team string) domain.PlayerRef {
+		return domain.PlayerRef{Platform: domain.PlatformESPN, ID: id, Name: name, Position: pos, NFLTeam: team}
+	}
+	tests := []struct {
+		name   string
+		ref    domain.PlayerRef
+		wantID string
+		ok     bool
+	}{
+		{"espn id wins over name", espn("4262921", "Someone Else", "WR", "MIN"), "6794", true},
+		{"name, position and team", espn("4685720", "Bryce Young", "QB", "CAR"), "9228", true},
+		{"suffix ignored", espn("4567048", "Kenneth Walker", "RB", "SEA"), "8151", true},
+		{"punctuation and case ignored", espn("4047646", "AJ BROWN", "WR", "PHI"), "7547", true},
+		{"team must match", espn("4685720", "Bryce Young", "QB", "PIT"), "", false},
+		{"position must match", espn("4685720", "Bryce Young", "RB", "CAR"), "", false},
+		{"ambiguous name stays unmapped", espn("15818", "Mike Williams", "WR", "NYJ"), "", false},
+		{"no name stays unmapped", espn("1", "", "QB", "CAR"), "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok, err := h.ix.Resolve(ctx, tt.ref)
+			if err != nil || ok != tt.ok || (ok && *got.ID != tt.wantID) {
+				t.Fatalf("Resolve = %+v, %v, %v", got, ok, err)
+			}
+		})
+	}
+
+	young, _, _ := h.ix.Resolve(ctx, espn("4685720", "Bryce Young", "QB", "CAR"))
+	if young.PlatformIDs["espn"] != "4685720" {
+		t.Errorf("a name-matched player should carry the ESPN id it was matched from: %v", young.PlatformIDs)
+	}
+	if idx := mustGet(t, h.ix, "9228"); idx.PlatformIDs["espn"] != "" {
+		t.Errorf("Resolve must not mutate the index entry: %v", idx.PlatformIDs)
+	}
+}
+
+func TestNormalizeName(t *testing.T) {
+	tests := map[string]string{
+		"Kenneth Walker III":  "kenneth walker",
+		"A.J. Brown":          "aj brown",
+		"Ja'Marr Chase":       "jamarr chase",
+		"Marvin Harrison Jr.": "marvin harrison",
+		"Amon-Ra St. Brown":   "amonra st brown",
+		"  Josh   Allen ":     "josh allen",
+		"Jr.":                 "jr",
+	}
+	for in, want := range tests {
+		if got := normalizeName(in); got != want {
+			t.Errorf("normalizeName(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

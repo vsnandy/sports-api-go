@@ -8,8 +8,10 @@ import (
 	"errors"
 	"log/slog"
 	"maps"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/vsnandy/sports-api-go/internal/domain"
 )
@@ -49,7 +51,8 @@ type slimPlayer struct {
 type snapshot struct {
 	loadedAt time.Time
 	byID     map[string]domain.Player
-	byESPN   map[string]string // espn id -> sleeper id
+	byESPN   map[string]string   // espn id -> sleeper id
+	byName   map[string][]string // nameKey -> sleeper ids, for players Sleeper has no espn_id for
 }
 
 type Index struct {
@@ -77,6 +80,9 @@ func (ix *Index) Get(ctx context.Context, id string) (domain.Player, bool, error
 
 // Resolve maps a provider's player reference to a Sleeper player. ESPN team
 // defenses are matched by NFL team, since Sleeper keys defenses by team abbreviation.
+// Other ESPN players match by espn_id, falling back to name + position + NFL team
+// because Sleeper's dump lacks espn_id for many current players; a fallback match
+// must be unique, or the player stays unmapped.
 func (ix *Index) Resolve(ctx context.Context, ref domain.PlayerRef) (domain.Player, bool, error) {
 	s, err := ix.snapshot(ctx)
 	if err != nil {
@@ -92,17 +98,53 @@ func (ix *Index) Resolve(ctx context.Context, ref domain.PlayerRef) (domain.Play
 			if !ok {
 				return domain.Player{}, false, nil
 			}
-			p.PlatformIDs = maps.Clone(p.PlatformIDs)
-			p.PlatformIDs["espn"] = ref.ID
-			return p, true, nil
+			return withESPNID(p, ref.ID), true, nil
 		}
-		id, ok := s.byESPN[ref.ID]
-		if !ok {
+		if id, ok := s.byESPN[ref.ID]; ok {
+			return s.byID[id], true, nil
+		}
+		if ref.Name == "" {
 			return domain.Player{}, false, nil
 		}
-		return s.byID[id], true, nil
+		ids := s.byName[nameKey(ref.Name, ref.Position, ref.NFLTeam)]
+		if len(ids) != 1 {
+			return domain.Player{}, false, nil
+		}
+		return withESPNID(s.byID[ids[0]], ref.ID), true, nil
 	}
 	return domain.Player{}, false, nil
+}
+
+// withESPNID returns p carrying espnID, without mutating the index's copy.
+func withESPNID(p domain.Player, espnID string) domain.Player {
+	p.PlatformIDs = maps.Clone(p.PlatformIDs)
+	p.PlatformIDs["espn"] = espnID
+	return p
+}
+
+func nameKey(name, pos, team string) string {
+	return normalizeName(name) + "|" + pos + "|" + team
+}
+
+var nameSuffixes = map[string]bool{"jr": true, "sr": true, "ii": true, "iii": true, "iv": true, "v": true}
+
+// normalizeName lowercases a name, drops punctuation, and removes a trailing
+// generational suffix, so "Kenneth Walker III" and "Kenneth Walker" compare equal.
+func normalizeName(name string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(name) {
+		switch {
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			b.WriteRune(r)
+		case unicode.IsSpace(r):
+			b.WriteRune(' ')
+		}
+	}
+	fields := strings.Fields(b.String())
+	if n := len(fields); n > 1 && nameSuffixes[fields[n-1]] {
+		fields = fields[:n-1]
+	}
+	return strings.Join(fields, " ")
 }
 
 // snapshot returns the current index, loading or refreshing it when older than
@@ -170,7 +212,12 @@ func (ix *Index) load(ctx context.Context) (*snapshot, error) {
 }
 
 func build(ps []domain.Player, loadedAt time.Time) *snapshot {
-	s := &snapshot{loadedAt: loadedAt, byID: make(map[string]domain.Player, len(ps)), byESPN: map[string]string{}}
+	s := &snapshot{
+		loadedAt: loadedAt,
+		byID:     make(map[string]domain.Player, len(ps)),
+		byESPN:   map[string]string{},
+		byName:   map[string][]string{},
+	}
 	for _, p := range ps {
 		if p.ID == nil {
 			continue
@@ -178,6 +225,10 @@ func build(ps []domain.Player, loadedAt time.Time) *snapshot {
 		s.byID[*p.ID] = p
 		if e := p.PlatformIDs["espn"]; e != "" {
 			s.byESPN[e] = *p.ID
+		}
+		if p.Name != "" {
+			k := nameKey(p.Name, p.Position, p.NFLTeam)
+			s.byName[k] = append(s.byName[k], *p.ID)
 		}
 	}
 	return s
