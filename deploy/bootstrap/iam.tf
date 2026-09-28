@@ -16,9 +16,13 @@ locals {
   ]
   kms_via_ssm = { StringEquals = { "kms:ViaService" = "ssm.${var.region}.amazonaws.com" } }
 
+  github_repo_subject = format("%s@%s/%s@%s",
+    split("/", var.github_repo)[0], var.github_owner_id,
+    split("/", var.github_repo)[1], var.github_repo_id,
+  )
   github_subjects = {
-    plan   = "repo:${var.github_repo}:pull_request"
-    deploy = "repo:${var.github_repo}:ref:refs/heads/main"
+    plan   = "repo:${local.github_repo_subject}:pull_request"
+    deploy = "repo:${local.github_repo_subject}:ref:refs/heads/main"
   }
   github_trust = {
     for role, sub in local.github_subjects : role => jsonencode({

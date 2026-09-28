@@ -13,6 +13,28 @@ variable "github_repo" {
   }
 }
 
+# GitHub's OIDC subject embeds immutable IDs: repo:<owner>@<owner_id>/<name>@<repo_id>:...
+# Find them with `curl -s https://api.github.com/repos/<owner>/<name> | jq '.owner.id, .id'`.
+variable "github_owner_id" {
+  description = "numeric GitHub ID of the repository owner"
+  type        = string
+  default     = "3279133"
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_owner_id))
+    error_message = "github_owner_id must be numeric."
+  }
+}
+
+variable "github_repo_id" {
+  description = "numeric GitHub ID of the repository"
+  type        = string
+  default     = "1388294779"
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repo_id))
+    error_message = "github_repo_id must be numeric."
+  }
+}
+
 variable "create_oidc_provider" {
   description = "false when this account already has a token.actions.githubusercontent.com OIDC provider"
   type        = bool
