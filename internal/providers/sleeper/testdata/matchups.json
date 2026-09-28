@@ -1,0 +1,5 @@
+[
+  {"roster_id": 2, "matchup_id": 1, "points": 98.5, "starters": ["4046", "4035", "2133", "0", "KC"], "players": ["4046", "4035", "2133", "KC", "6794"]},
+  {"roster_id": 1, "matchup_id": 1, "points": 112.34, "starters": ["4984", "4866", "7564", "9509", "SF"], "players": ["4984", "4866", "7564", "9509", "SF", "1234"]},
+  {"roster_id": 3, "matchup_id": null, "points": 0, "starters": [], "players": []}
+]

@@ -1,0 +1,135 @@
+name: deploy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.16.4"
+  TF_IN_AUTOMATION: "true"
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+  # Must match bootstrap's ssm_prefix and the stack's ssm_*_param defaults; only the
+  # smoke test reads this, so a repository-variable override would silently drift
+  # from the Lambda's actual parameter path.
+  SSM_PREFIX: "/sports-api/"
+  TF_VAR_region: ${{ vars.AWS_REGION }}
+  TF_VAR_sleeper_username: ${{ vars.SLEEPER_USERNAME }}
+  TF_VAR_espn_league_ids: ${{ vars.ESPN_LEAGUE_IDS || '[]' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then echo "$unformatted"; exit 1; fi
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test -race ./...
+      - name: CI script tests
+        run: ./scripts/test-ci-scripts.sh
+      - name: terraform fmt
+        run: terraform fmt -check -recursive deploy
+      - name: terraform test (bootstrap)
+        run: terraform -chdir=deploy/bootstrap init -input=false -backend=false && terraform -chdir=deploy/bootstrap test
+      - name: terraform test (stack)
+        run: terraform -chdir=deploy/terraform init -input=false -backend=false && terraform -chdir=deploy/terraform test
+
+  plan:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: plan-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check repository variables
+        env:
+          AWS_PLAN_ROLE_ARN: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          SLEEPER_USERNAME: ${{ vars.SLEEPER_USERNAME }}
+        run: ./scripts/check-vars.sh AWS_REGION TF_STATE_BUCKET AWS_PLAN_ROLE_ARN SLEEPER_USERNAME
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build Lambda
+        run: make build
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: terraform init
+        run: terraform -chdir=deploy/terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="region=$AWS_REGION"
+      - name: terraform plan
+        run: |
+          set -o pipefail
+          terraform -chdir=deploy/terraform plan -lock=false -input=false -no-color | tee plan.txt
+      - name: Publish plan to summary
+        if: always()
+        run: ./scripts/plan-summary.sh plan.txt
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    concurrency:
+      group: deploy-main
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check repository variables
+        env:
+          AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          SLEEPER_USERNAME: ${{ vars.SLEEPER_USERNAME }}
+        run: ./scripts/check-vars.sh AWS_REGION TF_STATE_BUCKET AWS_DEPLOY_ROLE_ARN SLEEPER_USERNAME
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build Lambda
+        run: make build
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: terraform init
+        run: terraform -chdir=deploy/terraform init -input=false -backend-config="bucket=$TF_STATE_BUCKET" -backend-config="region=$AWS_REGION"
+      - name: terraform apply
+        run: terraform -chdir=deploy/terraform apply -auto-approve -input=false -no-color
+      - name: Smoke test
+        run: |
+          API_URL=$(terraform -chdir=deploy/terraform output -raw api_url)
+          API_KEY=$(aws ssm get-parameter --name "${SSM_PREFIX}api-key" --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$API_KEY"
+          export API_URL API_KEY
+          make smoke
