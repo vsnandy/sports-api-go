@@ -17,7 +17,7 @@ run "state_bucket_name" {
 run "plan_role_trust" {
   command = plan
   assert {
-    condition     = jsondecode(aws_iam_role.plan.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:vsnandy/sports-api-go:pull_request"
+    condition     = jsondecode(aws_iam_role.plan.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:vsnandy@3279133/sports-api-go@1388294779:pull_request"
     error_message = "plan role must trust only pull_request tokens from this repo"
   }
   assert {
@@ -37,7 +37,7 @@ run "plan_role_trust" {
 run "deploy_role_trust" {
   command = plan
   assert {
-    condition     = jsondecode(aws_iam_role.deploy.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:vsnandy/sports-api-go:ref:refs/heads/main"
+    condition     = jsondecode(aws_iam_role.deploy.assume_role_policy).Statement[0].Condition.StringEquals["token.actions.githubusercontent.com:sub"] == "repo:vsnandy@3279133/sports-api-go@1388294779:ref:refs/heads/main"
     error_message = "deploy role must trust only the main branch"
   }
   assert {
