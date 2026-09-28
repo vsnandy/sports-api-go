@@ -73,7 +73,8 @@ Actions signs in to AWS with GitHub OIDC; no AWS keys are stored in GitHub.
    terraform -chdir=deploy/bootstrap init -migrate-state \
      -backend-config="bucket=$BUCKET" -backend-config="region=$REGION"
    ```
-   Answer `yes` to copy the state, then commit `deploy/bootstrap/backend.tf`.
+   Answer `yes` to copy the state, then run `terraform fmt deploy/bootstrap` (copying from this
+   list can indent the file, which fails CI's `terraform fmt -check`) and commit `deploy/bootstrap/backend.tf`.
 5. In GitHub, go to **Settings → Secrets and variables → Actions → Variables** and add:
 
    | Variable | Value |
