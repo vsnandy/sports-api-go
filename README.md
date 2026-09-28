@@ -101,6 +101,8 @@ it. To grant a role more (or less) access:
    terraform -chdir=deploy/bootstrap init -backend-config="bucket=<state bucket>" -backend-config="region=<region>"
    terraform -chdir=deploy/bootstrap apply
    ```
+   If the first bootstrap used `-var create_oidc_provider=false`, pass it on every later apply too,
+   or Terraform will try to create a second GitHub OIDC provider.
 3. Re-run the failed Actions job.
 
 This is also how you fix an `AccessDenied` from the first `plan` or `deploy` run: the CI roles
