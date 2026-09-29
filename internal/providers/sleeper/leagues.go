@@ -31,6 +31,7 @@ type userJSON struct {
 type rosterJSON struct {
 	RosterID int      `json:"roster_id"`
 	OwnerID  string   `json:"owner_id"`
+	CoOwners []string `json:"co_owners"`
 	Starters []string `json:"starters"`
 	Players  []string `json:"players"`
 	Reserve  []string `json:"reserve"`
@@ -46,18 +47,12 @@ type matchupJSON struct {
 }
 
 func (c *Client) ListLeagues(ctx context.Context, season int) ([]domain.LeagueSummary, error) {
-	var u *struct {
-		UserID string `json:"user_id"`
-	}
-	if err := c.get(ctx, c.apiBase+"/user/"+url.PathEscape(c.username), &u); err != nil {
+	uid, err := c.myUserID(ctx)
+	if err != nil {
 		return nil, err
 	}
-	if u == nil {
-		// Misconfiguration, not a client error: surface as 502.
-		return nil, &domain.UpstreamError{Provider: "sleeper", Err: fmt.Errorf("user %q not found", c.username)}
-	}
 	var ls []leagueJSON
-	if err := c.get(ctx, fmt.Sprintf("%s/user/%s/leagues/nfl/%d", c.apiBase, u.UserID, season), &ls); err != nil {
+	if err := c.get(ctx, fmt.Sprintf("%s/user/%s/leagues/nfl/%d", c.apiBase, uid, season), &ls); err != nil {
 		return nil, err
 	}
 	out := make([]domain.LeagueSummary, 0, len(ls))
@@ -91,6 +86,10 @@ func (c *Client) League(ctx context.Context, nativeID string, _ int) (domain.Lea
 	if err != nil {
 		return domain.League{}, err
 	}
+	uid, err := c.myUserID(ctx)
+	if err != nil {
+		return domain.League{}, err
+	}
 	byUser := map[string]userJSON{}
 	for _, u := range users {
 		byUser[u.UserID] = u
@@ -105,7 +104,8 @@ func (c *Client) League(ctx context.Context, nativeID string, _ int) (domain.Lea
 		if name == "" {
 			name = fmt.Sprintf("Team %d", r.RosterID)
 		}
-		teams = append(teams, domain.Team{ID: strconv.Itoa(r.RosterID), Name: name, Owner: u.DisplayName})
+		mine := r.OwnerID == uid || slices.Contains(r.CoOwners, uid)
+		teams = append(teams, domain.Team{ID: strconv.Itoa(r.RosterID), Name: name, Owner: u.DisplayName, Mine: mine})
 	}
 	scoring := domain.ScoringRules(l.ScoringSettings)
 	if scoring == nil {
@@ -213,4 +213,29 @@ func buildRoster(teamID string, slots, starters, players, reserve, taxi []string
 		}
 	}
 	return r
+}
+
+// myUserID resolves the configured username to a Sleeper user ID, once per client.
+// Concurrent first calls may each look it up; the result is the same.
+func (c *Client) myUserID(ctx context.Context) (string, error) {
+	c.mu.Lock()
+	id := c.userID
+	c.mu.Unlock()
+	if id != "" {
+		return id, nil
+	}
+	var u *struct {
+		UserID string `json:"user_id"`
+	}
+	if err := c.get(ctx, c.apiBase+"/user/"+url.PathEscape(c.username), &u); err != nil {
+		return "", err
+	}
+	if u == nil || u.UserID == "" {
+		// Misconfiguration, not a client error: surface as 502.
+		return "", &domain.UpstreamError{Provider: "sleeper", Err: fmt.Errorf("user %q not found", c.username)}
+	}
+	c.mu.Lock()
+	c.userID = u.UserID
+	c.mu.Unlock()
+	return u.UserID, nil
 }

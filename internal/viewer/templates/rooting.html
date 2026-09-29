@@ -1,0 +1,22 @@
+{{template "head" "Rooting guide"}}
+<div class="card">
+<a href="/">← All leagues</a>
+<h1>Rooting guide</h1>
+<div class="muted">{{.Season}} · week {{.Week}} · {{.Counted}} leagues counted{{if .NotPlaying}} · not playing this week: {{range $i, $n := .NotPlaying}}{{if $i}}, {{end}}{{$n}}{{end}}{{end}}</div>
+<div class="nav">
+{{if .Prev}}<a href="?week={{.Prev}}">‹ Week {{.Prev}}</a>{{end}}
+<form method="get"><select name="week">{{range .Weeks}}<option value="{{.}}"{{if eq . $.Week}} selected{{end}}>Week {{.}}</option>{{end}}</select> <button>Go</button></form>
+{{if .Next}}<a href="?week={{.Next}}">Week {{.Next}} ›</a>{{end}}
+<a href="?week={{.Week}}">⟳ Refresh</a>
+</div>
+</div>
+{{range .Warnings}}<div class="warn">{{.}}</div>{{end}}
+{{if not .Players}}<div class="card empty">No shared players this week.</div>{{end}}
+{{range .Players}}<div class="card rp">
+{{template "avatar" .}}
+<span class="who"><span class="name">{{.Name}}</span><span class="sub">{{.NFLTeam}}</span></span>
+<span class="net {{if gt .Net 0}}pos{{else if lt .Net 0}}neg{{else}}zero{{end}}">{{net .Net}}<small>{{.For}} for · {{.Against}} against</small></span>
+<div class="apps">{{range .Apps}}<a class="chip {{if .For}}for{{else}}against{{end}}" href="{{.Href}}">{{.League}}<b>{{pts .Points}}</b></a>{{end}}</div>
+</div>
+{{end}}
+{{template "foot"}}

@@ -2,6 +2,7 @@ package espn
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -36,7 +37,7 @@ func newTestClient(t *testing.T, s2 string, leagueIDs ...string) (*Client, *reco
 		rec.mu.Lock()
 		rec.queries = append(rec.queries, r.URL.Query())
 		rec.mu.Unlock()
-		if r.Header.Get("Cookie") != "espn_s2=S2; SWID={SWID}" {
+		if r.Header.Get("Cookie") != "espn_s2=S2; SWID=aaa" {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -55,7 +56,7 @@ func newTestClient(t *testing.T, s2 string, leagueIDs ...string) (*Client, *reco
 		}
 	}))
 	t.Cleanup(srv.Close)
-	return New(httpx.New("espn", 2*time.Second), srv.URL, s2, "{SWID}", leagueIDs), rec
+	return New(httpx.New("espn", 2*time.Second), srv.URL, s2, "aaa", leagueIDs), rec
 }
 
 func entryIDs(es []domain.RosterEntryRef) []string {
@@ -75,7 +76,7 @@ func TestLeague(t *testing.T) {
 	if l.ID != "espn:123456" || l.Name != "Office League" || l.Season != 2026 || l.Platform != domain.PlatformESPN {
 		t.Fatalf("header = %+v", l)
 	}
-	wantTeams := []domain.Team{{ID: "1", Name: "Team Varun", Owner: "varun"}, {ID: "2", Name: "Alex's Aces", Owner: "alex"}}
+	wantTeams := []domain.Team{{ID: "1", Name: "Team Varun", Owner: "varun", Mine: true}, {ID: "2", Name: "Alex's Aces", Owner: "alex"}}
 	if !reflect.DeepEqual(l.Teams, wantTeams) {
 		t.Errorf("Teams = %+v", l.Teams)
 	}
@@ -254,5 +255,31 @@ func TestWeekPlayerPoints(t *testing.T) {
 	}
 	if !reflect.DeepEqual(p.ByStat, map[int]float64{3: 10, 4: 12, 20: -2, 24: 4.5}) {
 		t.Fatalf("ByStat = %v", p.ByStat)
+	}
+}
+
+func TestNormSWID(t *testing.T) {
+	for _, s := range []string{"{AAA-1}", "aaa-1", " {aAa-1} ", "AAA-1"} {
+		if got := normSWID(s); got != "aaa-1" {
+			t.Errorf("normSWID(%q) = %q, want aaa-1", s, got)
+		}
+	}
+}
+
+func TestLeagueDoesNotExposeSWID(t *testing.T) {
+	c, _ := newTestClient(t, "S2", "123456")
+	l, err := c.League(context.Background(), "123456", 2026)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := json.Marshal(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.ToLower(string(b)), "aaa") {
+		t.Errorf("league JSON contains the SWID: %s", b)
+	}
+	if !strings.Contains(string(b), `"mine":true`) {
+		t.Errorf("league JSON missing mine flag: %s", b)
 	}
 }

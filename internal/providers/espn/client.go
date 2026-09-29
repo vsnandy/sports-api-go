@@ -23,11 +23,12 @@ type Client struct {
 	http      *httpx.Client
 	base      string
 	cookie    string
+	swid      string // normalized (normSWID) for matching team owners; never logged
 	leagueIDs []string
 }
 
 func New(hc *httpx.Client, base, espnS2, swid string, leagueIDs []string) *Client {
-	return &Client{http: hc, base: base, cookie: fmt.Sprintf("espn_s2=%s; SWID=%s", espnS2, swid), leagueIDs: leagueIDs}
+	return &Client{http: hc, base: base, cookie: fmt.Sprintf("espn_s2=%s; SWID=%s", espnS2, swid), swid: normSWID(swid), leagueIDs: leagueIDs}
 }
 
 func (c *Client) Platform() domain.Platform { return domain.PlatformESPN }

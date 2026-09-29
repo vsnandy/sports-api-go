@@ -71,15 +71,7 @@ func buildLeagueView(lg domain.League, ms []domain.Matchup, meta Meta) leagueVie
 		names[t.ID] = t.Name
 	}
 	v := leagueView{ID: lg.ID, Name: lg.Name, Season: meta.Season, Week: meta.Week, Warnings: meta.Warnings, Unsupported: lg.UnsupportedRules}
-	if v.Week > 1 {
-		v.Prev = v.Week - 1
-	}
-	if v.Week < 18 {
-		v.Next = v.Week + 1
-	}
-	for w := 1; w <= 18; w++ {
-		v.Weeks = append(v.Weeks, w)
-	}
+	v.Prev, v.Next, v.Weeks = weekNav(v.Week)
 	for _, m := range ms {
 		home, away := buildSide(m.Home, names), buildSide(m.Away, names)
 		home.Leading = home.Points >= away.Points
