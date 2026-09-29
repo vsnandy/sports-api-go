@@ -2,20 +2,62 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.}}</title>
 <style>
-body{font:14px/1.45 system-ui,sans-serif;margin:1.5rem auto;max-width:72rem;padding:0 1rem;color:#1d1d1f;background:#fff}
-a{color:#0b57d0} h1{font-size:1.4rem;margin:.2rem 0} h2{font-size:1.1rem} h3{font-size:1rem;margin:.6rem 0 .3rem}
-.muted{color:#666;font-size:12px}
-.warn{background:#fff4e5;border:1px solid #f0c36d;padding:.4rem .7rem;margin:.4rem 0}
-.err{background:#fdecea;border:1px solid #f5a8a0;padding:.6rem .8rem}
-details{border:1px solid #ddd;border-radius:6px;margin:.4rem 0;padding:.3rem .6rem}
-td details{border:none;margin:0;padding:0}
-summary{cursor:pointer}
-.matchup>summary{font-weight:600}
-.sides{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
-table{border-collapse:collapse;width:100%} td,th{padding:.2rem .4rem;border-bottom:1px solid #eee;text-align:left;vertical-align:top}
+:root{--bg:#0d1321;--card:#151d2e;--card-2:#1e2a42;--border:#243049;--text:#e8ecf4;--muted:#7c8aa5;--win:#3ee07f;--loss:#ff6b81;--loss-bg:#3a1e28;--link:#7cc4ff;--warn:#f0b429;--warn-bg:#2b2412}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,sans-serif}
+main{max-width:76rem;margin:0 auto;padding:1.25rem 1rem 3rem}
+a{color:var(--link);text-decoration:none} a:hover{text-decoration:underline}
+h1{font-size:1.5rem;margin:.15rem 0} h3{font-size:.95rem;margin:.2rem 0 .4rem}
+.muted{color:var(--muted);font-size:12px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:.8rem 1rem;margin:.6rem 0}
+.warn{background:var(--warn-bg);border:1px solid var(--warn);color:var(--warn);border-radius:10px;padding:.45rem .8rem;margin:.4rem 0;font-size:13px}
+.err{border-left:4px solid var(--loss)}
+.nav{display:flex;flex-wrap:wrap;gap:.8rem;align-items:center;margin-top:.6rem}
+.nav form{display:inline-flex;gap:.3rem}
+select,button{background:var(--card-2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:.25rem .5rem;font:inherit}
+button{cursor:pointer}
+summary{cursor:pointer;list-style:none} summary::-webkit-details-marker{display:none}
+.matchup{background:var(--card);border:1px solid var(--border);border-radius:12px;margin:.5rem 0}
+.matchup[open]{border-color:rgba(62,224,127,.45)}
+.strip{display:grid;grid-template-columns:1fr auto auto auto 1fr auto;gap:.8rem;align-items:center;padding:.7rem 1rem}
+.strip .away{text-align:right}
+.team{font-weight:700}
+.score{font-size:1.35rem;font-weight:800;font-variant-numeric:tabular-nums}
+.score.leading{color:var(--win)} .score.trailing{color:#9aa7c2}
+.dash{color:#4a5775}
+.chev{color:var(--muted);transition:transform .15s} .matchup[open] .chev{transform:rotate(180deg)}
+.sides{display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;padding:0 1rem 1rem}
+@media (max-width:760px){.sides{grid-template-columns:1fr}}
+.side-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--border);padding-bottom:.3rem}
+.row{display:flex;align-items:center;gap:.6rem;padding:.35rem 0;border-bottom:1px solid var(--border)}
+.row.bench{opacity:.7}
+.slot{width:2.6rem;font-size:11px;color:var(--muted);flex:none}
+.avatar{position:relative;width:34px;height:34px;flex:none;border-radius:50%;background:var(--card-2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--muted);overflow:hidden}
+.avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.avatar.def{border-radius:6px;background:transparent}
+.avatar.def img{object-fit:contain}
+.who{flex:1;min-width:0}
+.who .name,.who .sub{display:block}
+.who .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.who .sub{color:var(--muted);font-size:11px}
+.tag{font-size:10px;border-radius:4px;padding:1px 6px;flex:none}
+.tag.ESPN{background:#1e3a5f;color:var(--link)} .tag.computed{background:#173a2a;color:var(--win)}
+.pts{min-width:3.6rem;font-weight:700;color:var(--win);text-align:right;font-variant-numeric:tabular-nums;flex:none}
+.pts.none{color:var(--muted);font-weight:400}
+.benchlabel{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:.7rem 0 .2rem}
+.chips{display:flex;flex-wrap:wrap;gap:.35rem;padding:.45rem 0 .5rem 3.2rem}
+.chip{background:var(--card-2);border-radius:999px;padding:2px 9px;font-size:12px}
+.chip b{margin-left:.35rem;font-variant-numeric:tabular-nums}
+.chip.gain b{color:var(--win)} .chip.loss{background:var(--loss-bg)} .chip.loss b{color:var(--loss)}
+.chip.total{border:1px solid var(--border);background:transparent}
+.rawstats{padding:0 0 .5rem 3.2rem;color:var(--muted);font-size:11px}
+.leagues{display:grid;grid-template-columns:repeat(auto-fill,minmax(16rem,1fr));gap:.8rem;margin-top:1rem}
+.league-card{display:flex;justify-content:space-between;align-items:center;gap:.6rem;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1rem;color:var(--text);font-weight:700}
+.league-card:hover{border-color:var(--link);text-decoration:none}
+.badge{font-size:10px;font-weight:700;border-radius:4px;padding:2px 6px;letter-spacing:.04em;flex:none}
+.badge.espn{background:#5a1a1a;color:#ff8a80} .badge.sleeper{background:#2a2350;color:#b9a7ff}
+table{border-collapse:collapse;width:100%} td,th{padding:.25rem .4rem;border-bottom:1px solid var(--border);text-align:left}
 .num{text-align:right;font-variant-numeric:tabular-nums}
-.tag{font-size:11px;padding:0 .3rem;border-radius:3px;background:#e8eefc}
-.tag.computed{background:#e7f5e9}
-nav form{display:inline}
-</style></head><body>{{end}}
-{{define "foot"}}</body></html>{{end}}
+.empty{color:var(--muted);text-align:center;padding:1.5rem}
+</style></head><body><main>{{end}}
+{{define "foot"}}</main></body></html>{{end}}

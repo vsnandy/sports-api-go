@@ -1,6 +1,7 @@
 {{template "head" "Leagues"}}
 <h1>Leagues {{.Season}}</h1>
 {{range .Warnings}}<div class="warn">{{.}}</div>{{end}}
-{{if .ESPN}}<h2>ESPN</h2><ul>{{range .ESPN}}<li><a href="{{.Href}}">{{.Name}}</a></li>{{end}}</ul>{{end}}
-{{if .Sleeper}}<h2>Sleeper</h2><ul>{{range .Sleeper}}<li><a href="{{.Href}}">{{.Name}}</a></li>{{end}}</ul>{{end}}
+<div class="leagues">
+{{range .Leagues}}<a class="league-card" href="{{.Href}}"><span>{{.Name}}</span><span class="badge {{.Platform}}">{{if eq .Platform "espn"}}ESPN{{else}}Sleeper{{end}}</span></a>
+{{end}}</div>
 {{template "foot"}}

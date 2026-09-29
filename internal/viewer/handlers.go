@@ -31,6 +31,12 @@ var funcs = template.FuncMap{
 		return ""
 	},
 	"num": func(v float64) string { return strconv.FormatFloat(v, 'g', -1, 64) },
+	"signed": func(v float64) string {
+		if v < 0 {
+			return fmt.Sprintf("−%.2f", -v)
+		}
+		return fmt.Sprintf("+%.2f", v)
+	},
 }
 
 type server struct {
@@ -64,12 +70,12 @@ func loopbackOnly(next http.Handler) http.Handler {
 	})
 }
 
-type leagueLink struct{ Name, Href string }
+type leagueLink struct{ Name, Href, Platform string }
 
 type leaguesView struct {
-	Season        int
-	Warnings      []string
-	ESPN, Sleeper []leagueLink
+	Season   int
+	Warnings []string
+	Leagues  []leagueLink // ESPN first, then Sleeper
 }
 
 type errorView struct{ Title, Code, Message string }
@@ -82,14 +88,16 @@ func (s *server) leagues(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	v := leaguesView{Season: meta.Season, Warnings: meta.Warnings}
+	var sleeperLinks []leagueLink
 	for _, l := range ls {
-		link := leagueLink{Name: l.Name, Href: "/league/" + url.PathEscape(l.ID)}
+		link := leagueLink{Name: l.Name, Href: "/league/" + url.PathEscape(l.ID), Platform: string(l.Platform)}
 		if l.Platform == domain.PlatformESPN {
-			v.ESPN = append(v.ESPN, link)
+			v.Leagues = append(v.Leagues, link)
 		} else {
-			v.Sleeper = append(v.Sleeper, link)
+			sleeperLinks = append(sleeperLinks, link)
 		}
 	}
+	v.Leagues = append(v.Leagues, sleeperLinks...)
 	s.render(w, http.StatusOK, "leagues.html", v)
 }
 

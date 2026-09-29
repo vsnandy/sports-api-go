@@ -1,21 +1,30 @@
 {{template "head" .Name}}
-<p><a href="/">← All leagues</a></p>
+<div class="card">
+<a href="/">← All leagues</a>
 <h1>{{.Name}}</h1>
-<p class="muted">{{.Season}} · week {{.Week}}</p>
-<nav>
-{{if .Prev}}<a href="?week={{.Prev}}">← Week {{.Prev}}</a>{{end}}
+<div class="muted">{{.Season}} · week {{.Week}}</div>
+<div class="nav">
+{{if .Prev}}<a href="?week={{.Prev}}">‹ Week {{.Prev}}</a>{{end}}
 <form method="get"><select name="week">{{range .Weeks}}<option value="{{.}}"{{if eq . $.Week}} selected{{end}}>Week {{.}}</option>{{end}}</select> <button>Go</button></form>
-{{if .Next}}<a href="?week={{.Next}}">Week {{.Next}} →</a>{{end}}
-· <a href="?week={{.Week}}">Refresh</a>
-</nav>
+{{if .Next}}<a href="?week={{.Next}}">Week {{.Next}} ›</a>{{end}}
+<a href="?week={{.Week}}">⟳ Refresh</a>
+</div>
+</div>
 {{range .Warnings}}<div class="warn">{{.}}</div>{{end}}
-{{if not .Matchups}}<p>No matchups this week.</p>{{end}}
+{{if not .Matchups}}<div class="card empty">No matchups this week.</div>{{end}}
 {{range .Matchups}}
-<details class="matchup"><summary>{{.Home.Name}} {{pts .Home.Points}} — {{pts .Away.Points}} {{.Away.Name}}</summary>
+<details class="matchup"><summary class="strip">
+<span class="team">{{.Home.Name}}</span>
+<span class="score {{if .Home.Leading}}leading{{else}}trailing{{end}}">{{pts .Home.Points}}</span>
+<span class="dash">–</span>
+<span class="score {{if .Away.Leading}}leading{{else}}trailing{{end}}">{{pts .Away.Points}}</span>
+<span class="team away">{{.Away.Name}}</span>
+<span class="chev">▾</span>
+</summary>
 <div class="sides">{{template "side" .Home}}{{template "side" .Away}}</div>
 </details>
 {{end}}
-<details><summary>Scoring rules</summary>
+<details class="card"><summary><h3 style="display:inline">Scoring rules</h3></summary>
 <h3>Base</h3>
 <table>{{range .Rules}}<tr><td>{{.Label}}</td><td class="num">{{num .Value}}</td></tr>{{end}}</table>
 {{range .ByPosition}}<h3>{{.Position}}</h3>
@@ -27,22 +36,16 @@
 {{template "foot"}}
 
 {{define "side"}}<div>
-<h3>{{.Name}} <span class="muted">{{pts .Points}}</span></h3>
-<table>
-<tr><th>Slot</th><th>Player</th><th>Team</th><th class="num">Pts</th><th></th></tr>
+<div class="side-head"><h3>{{.Name}}</h3><span class="pts">{{pts .Points}}</span></div>
 {{range .Starters}}{{template "player" .}}{{end}}
-{{if .Bench}}<tr><th colspan="5">Bench</th></tr>{{range .Bench}}{{template "player" .}}{{end}}{{end}}
-</table>
+{{if .Bench}}<div class="benchlabel">Bench</div>{{range .Bench}}{{template "player" .}}{{end}}{{end}}
 </div>{{end}}
 
-{{define "player"}}<tr>
-<td>{{.Slot}}</td>
-<td>{{if .Breakdown}}<details><summary>{{.Name}}</summary>
-<table>{{range .Breakdown}}<tr><td>{{.Label}}</td><td class="num">{{pts .Points}}</td></tr>{{end}}
-<tr><th>Total</th><th class="num">{{pts .Total}}</th></tr></table>
-{{if .Stats}}<p class="muted">{{.Stats}}</p>{{end}}
-</details>{{else}}{{.Name}}{{end}}</td>
-<td>{{.NFLTeam}}</td>
-<td class="num">{{pts .Points}}</td>
-<td>{{if .Source}}<span class="tag {{.Source}}">{{.Source}}</span>{{end}}</td>
-</tr>{{end}}
+{{define "avatar"}}<span class="avatar{{if .IsDEF}} def{{end}}">{{.Initials}}{{if .Image}}<img src="{{.Image}}" alt="" loading="lazy">{{end}}</span>{{end}}
+
+{{define "rowbody"}}<span class="slot">{{.Slot}}</span>{{template "avatar" .}}<span class="who"><span class="name">{{.Name}}</span><span class="sub">{{.NFLTeam}}</span></span>{{if .Source}}<span class="tag {{.Source}}">{{.Source}}</span>{{end}}<span class="pts{{if not .Points}} none{{end}}">{{pts .Points}}</span>{{end}}
+
+{{define "player"}}{{if .Breakdown}}<details class="player"><summary class="row{{if .Bench}} bench{{end}}">{{template "rowbody" .}}</summary>
+<div class="chips">{{range .Breakdown}}<span class="chip {{if .Gain}}gain{{else}}loss{{end}}">{{.Label}}<b>{{signed .Points}}</b></span>{{end}}<span class="chip total">Total<b>{{pts .Total}}</b></span></div>
+{{if .Stats}}<div class="rawstats">{{.Stats}}</div>{{end}}
+</details>{{else}}<div class="row{{if .Bench}} bench{{end}}">{{template "rowbody" .}}</div>{{end}}{{end}}

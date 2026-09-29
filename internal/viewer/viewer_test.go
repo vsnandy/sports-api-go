@@ -22,7 +22,7 @@ func matchupsJSON(week string) string {
 	return `{"data":[{"week":` + week + `,
  "home":{"teamId":"1","points":22,"roster":{"teamId":"1",
    "starters":[
-     {"slot":"QB","player":{"id":"4046","name":"Patrick Mahomes","position":"QB","nflTeam":"KC","platformIds":{}},"stats":{"pass_td":2,"pass_yd":250},"points":18,"pointsSource":"platform","pointsBreakdown":{"pass_td":8,"espn_pass_yd_per_25":10}},
+     {"slot":"QB","player":{"id":"4046","name":"Patrick Mahomes","position":"QB","nflTeam":"KC","platformIds":{}},"stats":{"pass_td":2,"pass_yd":250},"points":18,"pointsSource":"platform","pointsBreakdown":{"pass_td":8,"espn_pass_yd_per_25":10,"pass_int":-2}},
      {"slot":"DEF","player":{"id":"PIT","name":"Pittsburgh Steelers","position":"DEF","nflTeam":"PIT","platformIds":{}},"stats":{"sack":3,"pts_allow":14},"points":4,"pointsSource":"computed","pointsBreakdown":{"sack":3,"espn_pa_14_17":1}}],
    "bench":[{"slot":"BN","player":{"id":null,"name":"Rookie Guy","position":"RB","nflTeam":"","platformIds":{"espn":"9"}},"stats":null,"points":null}],
    "reserve":[]}},
@@ -309,5 +309,34 @@ func TestRejectsNonLoopbackHost(t *testing.T) {
 	}
 	if n := len(f.urls()); n != 3 {
 		t.Errorf("API calls = %d, want 3 (only the loopback requests)", n)
+	}
+}
+
+func TestLeaguePageVisuals(t *testing.T) {
+	_, h := newTestHandler(t)
+	code, body := get(t, h, "/league/espn:1")
+	if code != 200 {
+		t.Fatalf("status %d", code)
+	}
+	mustContain(t, body,
+		`--bg:#0d1321`,
+		`PM<img src="https://sleepercdn.com/content/nfl/players/thumb/4046.jpg" alt="" loading="lazy">`,
+		`class="avatar def">PS<img src="https://sleepercdn.com/images/team_logos/nfl/pit.png"`,
+		`RG<img src="https://a.espncdn.com/i/headshots/nfl/players/full/9.png"`,
+		`class="score leading">22.00`,
+		`class="score trailing">0.00`,
+		`class="chip gain">Passing TDs<b>&#43;8.00</b>`, // html/template escapes "+"; browsers render it as +
+		`class="chip loss">Interceptions thrown<b>−2.00</b>`,
+		`class="row bench"`,
+		`class="pts none">—`,
+	)
+}
+
+func TestLeaguesPageBadges(t *testing.T) {
+	_, h := newTestHandler(t)
+	_, body := get(t, h, "/")
+	mustContain(t, body, `class="badge espn">ESPN`, `class="badge sleeper">Sleeper`, `class="league-card" href="/league/espn:1"`)
+	if strings.Index(body, "Office League") > strings.Index(body, "Dynasty") {
+		t.Error("ESPN leagues should be listed before Sleeper leagues")
 	}
 }
