@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,19 +20,38 @@ var slots = []string{"QB", "RB", "WR", "FLEX", "DEF", "BN", "BN"}
 
 func newTestClient(t *testing.T) *Client {
 	t.Helper()
+	c, _ := newCountingClient(t, "varun")
+	return c
+}
+
+// newCountingClient serves testdata and reports how many times each path was requested.
+func newCountingClient(t *testing.T, username string) (*Client, func(path string) int) {
+	t.Helper()
 	routes := map[string]string{
 		"/v1/state/nfl":                "state.json",
 		"/v1/user/varun":               "user.json",
+		"/v1/user/ghost":               "null.json",
 		"/v1/user/u1/leagues/nfl/2026": "user_leagues.json",
 		"/v1/league/111":               "league.json",
 		"/v1/league/111/users":         "users.json",
 		"/v1/league/111/rosters":       "rosters.json",
 		"/v1/league/111/matchups/3":    "matchups.json",
+		"/v1/league/444":               "league.json",
+		"/v1/league/444/users":         "users.json",
+		"/v1/league/444/rosters":       "rosters_coowned.json",
+		"/v1/league/555":               "league.json",
+		"/v1/league/555/users":         "users.json",
+		"/v1/league/555/rosters":       "rosters_others.json",
 		"/v1/players/nfl":              "players.json",
 		"/stats/nfl/2026/3":            "week_stats.json",
 		"/stats/nfl/player/6794":       "gamelog.json",
 	}
+	var mu sync.Mutex
+	hits := map[string]int{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits[r.URL.Path]++
+		mu.Unlock()
 		if strings.HasPrefix(r.URL.Path, "/stats/") && r.URL.Query().Get("season_type") != "regular" {
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -44,7 +64,12 @@ func newTestClient(t *testing.T) *Client {
 		http.ServeFile(w, r, filepath.Join("testdata", f))
 	}))
 	t.Cleanup(srv.Close)
-	return New(httpx.New("sleeper", 2*time.Second), srv.URL+"/v1", srv.URL, "varun")
+	count := func(path string) int {
+		mu.Lock()
+		defer mu.Unlock()
+		return hits[path]
+	}
+	return New(httpx.New("sleeper", 2*time.Second), srv.URL+"/v1", srv.URL, username), count
 }
 
 func ids(entries []domain.RosterEntryRef) []string {
@@ -84,7 +109,7 @@ func TestLeague(t *testing.T) {
 	if l.ID != "sleeper:111" || l.Name != "Dynasty Bros" || l.Season != 2026 || l.Sport != domain.SportNFL {
 		t.Fatalf("League header = %+v", l)
 	}
-	wantTeams := []domain.Team{{ID: "1", Name: "Gridiron Gurus", Owner: "Varun"}, {ID: "2", Name: "Sam", Owner: "Sam"}}
+	wantTeams := []domain.Team{{ID: "1", Name: "Gridiron Gurus", Owner: "Varun", Mine: true}, {ID: "2", Name: "Sam", Owner: "Sam"}}
 	if !reflect.DeepEqual(l.Teams, wantTeams) {
 		t.Fatalf("Teams = %+v", l.Teams)
 	}
@@ -193,5 +218,69 @@ func TestPlayerGamelog(t *testing.T) {
 	}
 	if len(lines) != 2 || lines[0].Week != 1 || lines[1].Week != 3 || lines[1].Stats["rec_td"] != 1 {
 		t.Fatalf("gamelog = %+v (bye week should be skipped, sorted by week)", lines)
+	}
+}
+
+func mineIDs(ts []domain.Team) []string {
+	out := []string{}
+	for _, t := range ts {
+		if t.Mine {
+			out = append(out, t.ID)
+		}
+	}
+	return out
+}
+
+func TestLeagueMineViaCoOwner(t *testing.T) {
+	l, err := newTestClient(t).League(context.Background(), "444", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := mineIDs(l.Teams); !reflect.DeepEqual(got, []string{"1"}) {
+		t.Fatalf("mine teams = %v, want [1]", got)
+	}
+}
+
+func TestLeagueMineNone(t *testing.T) {
+	l, err := newTestClient(t).League(context.Background(), "555", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := mineIDs(l.Teams); len(got) != 0 {
+		t.Fatalf("mine teams = %v, want none", got)
+	}
+}
+
+func TestLeagueUnknownUserFails(t *testing.T) {
+	c, _ := newCountingClient(t, "ghost")
+	_, err := c.League(context.Background(), "111", 0)
+	var ue *domain.UpstreamError
+	if !errors.As(err, &ue) {
+		t.Fatalf("err = %v, want *domain.UpstreamError", err)
+	}
+}
+
+func TestUserIDLookedUpOnce(t *testing.T) {
+	c, hits := newCountingClient(t, "varun")
+	ctx := context.Background()
+	if _, err := c.League(ctx, "111", 0); err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := c.League(ctx, "111", 0); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	if _, err := c.ListLeagues(ctx, 2026); err != nil {
+		t.Fatal(err)
+	}
+	if n := hits("/v1/user/varun"); n != 1 {
+		t.Fatalf("user lookups = %d, want 1", n)
 	}
 }

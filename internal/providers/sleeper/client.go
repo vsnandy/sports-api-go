@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/vsnandy/sports-api-go/internal/domain"
 	"github.com/vsnandy/sports-api-go/internal/providers/httpx"
@@ -23,6 +24,9 @@ type Client struct {
 	apiBase   string
 	statsBase string
 	username  string
+
+	mu     sync.Mutex
+	userID string // resolved from username on first successful lookup
 }
 
 func New(hc *httpx.Client, apiBase, statsBase, username string) *Client {
