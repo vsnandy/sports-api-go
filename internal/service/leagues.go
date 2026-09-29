@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"maps"
+	"math"
 
 	"golang.org/x/sync/errgroup"
 
@@ -212,9 +214,15 @@ func attachPoints(r domain.Roster, ref domain.RosterRef, lines map[string]domain
 			case i < len(g.refs) && g.refs[i].PlatformPoints != nil:
 				pts := *g.refs[i].PlatformPoints
 				e.Points, e.PointsSource = &pts, "platform"
+				e.PointsBreakdown = maps.Clone(g.refs[i].PlatformBreakdown)
 			case hasLine:
 				pts := scoring.Points(line.Stats, s, e.Player.Position)
 				e.Points, e.PointsSource = &pts, "computed"
+				b := scoring.Breakdown(line.Stats, s, e.Player.Position)
+				for k, v := range b {
+					b[k] = math.Round(v*100) / 100
+				}
+				e.PointsBreakdown = b
 			}
 		}
 	}

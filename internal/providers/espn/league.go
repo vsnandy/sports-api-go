@@ -188,6 +188,7 @@ func toRoster(teamID string, entries []entryJSON, week int) domain.RosterRef {
 			if row, ok := e.actualRow(week); ok {
 				total := row.AppliedTotal
 				ref.PlatformPoints = &total
+				ref.PlatformBreakdown = breakdownFromApplied(row.AppliedStats)
 			}
 		}
 		switch ref.Slot {
@@ -374,4 +375,18 @@ func (c *Client) WeekPlayerPoints(ctx context.Context, nativeID string, season, 
 		}
 	}
 	return out, nil
+}
+
+// breakdownFromApplied converts ESPN appliedStats (stat ID → points) into points per
+// stat key, dropping zeros and summing IDs that share a key.
+func breakdownFromApplied(applied map[string]float64) map[string]float64 {
+	out := map[string]float64{}
+	for k, v := range applied {
+		id, err := strconv.Atoi(k)
+		if err != nil || v == 0 {
+			continue
+		}
+		out[espnKeyForID(id)] += v
+	}
+	return out
 }

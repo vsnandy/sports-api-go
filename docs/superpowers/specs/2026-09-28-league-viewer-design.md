@@ -29,8 +29,9 @@ layout, deploying the viewer.
 ## 2. API Addition: `pointsBreakdown`
 
 `GET /v1/nfl/leagues/{id}/matchups?include=stats` gains, per roster entry, a
-`pointsBreakdown` object: points contributed per stat key. Present exactly when `points`
-is non-null (same rule as `pointsSource`); omitted otherwise. No other response change.
+`pointsBreakdown` object: points contributed per stat key. Set only when `points`
+is non-null (same rule as `pointsSource`); omitted when null or when no stat contributed
+(e.g. 0 points). No other response change.
 
 ```json
 {"slot": "DEF", "points": 8, "pointsSource": "platform",
