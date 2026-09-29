@@ -28,15 +28,17 @@ type LeagueSummary struct {
 }
 
 type League struct {
-	ID               string       `json:"id"`
-	Platform         Platform     `json:"platform"`
-	Sport            Sport        `json:"sport"`
-	Season           int          `json:"season"`
-	Name             string       `json:"name"`
-	Teams            []Team       `json:"teams"`
-	Scoring          ScoringRules `json:"scoring"`
-	UnsupportedRules []string     `json:"unsupportedRules"`
-	RosterSlots      []string     `json:"rosterSlots"`
+	ID                string                  `json:"id"`
+	Platform          Platform                `json:"platform"`
+	Sport             Sport                   `json:"sport"`
+	Season            int                     `json:"season"`
+	Name              string                  `json:"name"`
+	Teams             []Team                  `json:"teams"`
+	Scoring           ScoringRules            `json:"scoring"`
+	ScoringByPosition map[string]ScoringRules `json:"scoringByPosition"`
+	DerivedStats      []DerivedStat           `json:"derivedStats"`
+	UnsupportedRules  []string                `json:"unsupportedRules"`
+	RosterSlots       []string                `json:"rosterSlots"`
 }
 
 type Team struct {
@@ -48,6 +50,31 @@ type Team struct {
 // ScoringRules maps a Sleeper stat key to points per unit of that stat.
 type ScoringRules map[string]float64
 
+// Scoring is a league's full scoring model: base rules, per-position replacements
+// (e.g. ESPN's D/ST values), and indicator stats derived from raw stats (tiers).
+type Scoring struct {
+	Rules      ScoringRules
+	ByPosition map[string]ScoringRules
+	Derived    []DerivedStat
+}
+
+// DerivedStat sets Key to 1 when From lies in [Min, Max] (nil Max unbounded), or,
+// when Step > 0, to the number of whole Steps in From.
+type DerivedStat struct {
+	Key  string   `json:"key"`
+	From string   `json:"from"`
+	Min  float64  `json:"min"`
+	Max  *float64 `json:"max"`
+	// Step, when > 0, sets Key to the number of whole Steps in From (e.g. every
+	// 25 passing yards) instead of an in-range indicator; Min and Max are ignored.
+	Step float64 `json:"step,omitempty"`
+}
+
+// ScoringModel assembles the league's scoring for the engine.
+func (l League) ScoringModel() Scoring {
+	return Scoring{Rules: l.Scoring, ByPosition: l.ScoringByPosition, Derived: l.DerivedStats}
+}
+
 type Player struct {
 	ID          *string           `json:"id"` // Sleeper ID; nil when an ESPN player could not be mapped
 	Name        string            `json:"name"`
@@ -56,13 +83,14 @@ type Player struct {
 	PlatformIDs map[string]string `json:"platformIds"`
 }
 
-// RosterEntry is a rostered player. Stats and Points are nil unless stats were
+// RosterEntry is a rostered player. Stats, Points and PointsSource are unset unless stats were
 // requested and available for that player.
 type RosterEntry struct {
-	Slot   string             `json:"slot"`
-	Player Player             `json:"player"`
-	Stats  map[string]float64 `json:"stats"`
-	Points *float64           `json:"points"`
+	Slot         string             `json:"slot"`
+	Player       Player             `json:"player"`
+	Stats        map[string]float64 `json:"stats"`
+	Points       *float64           `json:"points"`
+	PointsSource string             `json:"pointsSource,omitempty"` // "platform" or "computed" when Points is set
 }
 
 type Roster struct {
@@ -119,6 +147,8 @@ type PlayerRef struct {
 type RosterEntryRef struct {
 	Slot string
 	Ref  PlayerRef
+	// PlatformPoints is the platform's own points for the requested week, when it reports them.
+	PlatformPoints *float64
 }
 
 type RosterRef struct {

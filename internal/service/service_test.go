@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -275,5 +276,71 @@ func TestGamelogUnknownPlayer(t *testing.T) {
 	f := newFixture()
 	if _, _, err := f.svc.Gamelog(ctx, "0000", 0, "ppr"); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func espnMatchups() []domain.MatchupRef {
+	return []domain.MatchupRef{{
+		Week: 3,
+		Home: domain.MatchupSideRef{TeamID: "1", Points: 42.6, Roster: domain.RosterRef{
+			TeamID: "1",
+			Starters: []domain.RosterEntryRef{
+				withPlatformPoints(espnRef("QB", "3139477", "Patrick Mahomes", "QB", "KC"), 24.5),
+				withPlatformPoints(espnRef("RB", "9999999", "Rookie Guy", "RB", ""), 7),
+				espnRef("WR", "4262921", "Justin Jefferson", "WR", "MIN"),
+			},
+		}},
+		Away: domain.MatchupSideRef{TeamID: "2", Roster: domain.RosterRef{TeamID: "2"}},
+	}}
+}
+
+func TestMatchupsPlatformPoints(t *testing.T) {
+	f := newFixture()
+	f.espn.matchups = espnMatchups()
+	ms, _, err := f.svc.Matchups(ctx, "espn:123456", 0, 3, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := ms[0].Home.Roster.Starters
+	if *st[0].Points != 24.5 || st[0].PointsSource != "platform" || st[0].Stats["pass_td"] != 2 {
+		t.Errorf("mapped ESPN player: %+v (want platform 24.5 with Sleeper stats)", st[0])
+	}
+	if st[1].Player.ID != nil || *st[1].Points != 7 || st[1].PointsSource != "platform" || st[1].Stats != nil {
+		t.Errorf("unmapped ESPN player: %+v (want platform 7, nil stats)", st[1])
+	}
+	// No platform points → engine with the ESPN league's rules: rec 6×0.5 + rec_yd 85×0.1.
+	if *st[2].Points != 11.5 || st[2].PointsSource != "computed" {
+		t.Errorf("fallback: %+v (want computed 11.5)", st[2])
+	}
+}
+
+func TestMatchupsPlatformPointsSurviveStatsFailure(t *testing.T) {
+	f := newFixture()
+	f.espn.matchups = espnMatchups()
+	f.stats.weekErr = &domain.UpstreamError{Provider: "sleeper", Status: 500}
+	ms, meta, err := f.svc.Matchups(ctx, "espn:123456", 0, 3, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := ms[0].Home.Roster.Starters
+	if *st[0].Points != 24.5 || st[0].PointsSource != "platform" || st[0].Stats != nil {
+		t.Errorf("platform points should survive a stats failure: %+v", st[0])
+	}
+	if st[2].Points != nil || st[2].PointsSource != "" {
+		t.Errorf("no platform points and no stats → no points: %+v", st[2])
+	}
+	if !slices.ContainsFunc(meta.Warnings, func(w string) bool { return strings.HasPrefix(w, "stats_unavailable:") }) {
+		t.Errorf("warnings = %v, want a stats_unavailable warning", meta.Warnings)
+	}
+}
+
+func TestSleeperMatchupsAreComputed(t *testing.T) {
+	f := newFixture()
+	ms, _, err := f.svc.Matchups(ctx, "sleeper:111", 0, 3, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if src := ms[0].Home.Roster.Starters[0].PointsSource; src != "computed" {
+		t.Fatalf("PointsSource = %q, want computed", src)
 	}
 }

@@ -8,15 +8,58 @@ import (
 	"github.com/vsnandy/sports-api-go/internal/domain"
 )
 
-// Points returns Σ stats[k] × rules[k] over keys present in both, rounded to 2 decimals.
-func Points(stats map[string]float64, rules domain.ScoringRules) float64 {
-	var total float64
-	for k, v := range stats {
-		if w, ok := rules[k]; ok {
-			total += v * w
+// Breakdown returns the points each stat contributes (derived stats included),
+// unrounded, omitting zero contributions. A stat's weight is the position's
+// replacement rule if present, otherwise the base rule.
+func Breakdown(stats map[string]float64, s domain.Scoring, position string) map[string]float64 {
+	all := withDerived(stats, s.Derived)
+	pos := s.ByPosition[position]
+	out := map[string]float64{}
+	for k, v := range all {
+		w, ok := pos[k]
+		if !ok {
+			w, ok = s.Rules[k]
+		}
+		if ok && v*w != 0 {
+			out[k] = v * w
 		}
 	}
+	return out
+}
+
+// Points returns the sum of Breakdown rounded to 2 decimals.
+func Points(stats map[string]float64, s domain.Scoring, position string) float64 {
+	var total float64
+	for _, p := range Breakdown(stats, s, position) {
+		total += p
+	}
 	return math.Round(total*100) / 100
+}
+
+// withDerived returns stats plus a 1 for every derived stat whose raw value is in range.
+// The caller's map is never modified.
+func withDerived(stats map[string]float64, derived []domain.DerivedStat) map[string]float64 {
+	if len(derived) == 0 {
+		return stats
+	}
+	out := make(map[string]float64, len(stats)+len(derived))
+	maps.Copy(out, stats)
+	for _, d := range derived {
+		v, ok := stats[d.From]
+		if !ok {
+			continue
+		}
+		if d.Step > 0 {
+			if n := math.Floor(v / d.Step); n != 0 {
+				out[d.Key] = n
+			}
+			continue
+		}
+		if v >= d.Min && (d.Max == nil || v <= *d.Max) {
+			out[d.Key] = 1
+		}
+	}
+	return out
 }
 
 // base is standard (non-PPR) scoring in Sleeper stat keys.
@@ -33,7 +76,7 @@ var base = domain.ScoringRules{
 }
 
 // Preset returns a fresh copy of the named preset: "ppr", "half", or "std".
-func Preset(name string) (domain.ScoringRules, bool) {
+func Preset(name string) (domain.Scoring, bool) {
 	var rec float64
 	switch name {
 	case "ppr":
@@ -43,9 +86,9 @@ func Preset(name string) (domain.ScoringRules, bool) {
 	case "std":
 		rec = 0
 	default:
-		return nil, false
+		return domain.Scoring{}, false
 	}
 	r := maps.Clone(base)
 	r["rec"] = rec
-	return r, true
+	return domain.Scoring{Rules: r}, true
 }
