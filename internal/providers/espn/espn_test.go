@@ -144,6 +144,8 @@ func TestMatchups(t *testing.T) {
 		t.Fatalf("got %d matchups, want 1 (other weeks and byes skipped)", len(ms))
 	}
 	m := ms[0]
+	// Home is a finalized side (totalPoints); away is ESPN's shape for a period that is not
+	// final yet: totalPoints 0 with the running score in totalPointsLive.
 	if m.Week != 3 || m.Home.TeamID != "2" || m.Home.Points != 101.2 || m.Away.TeamID != "1" || m.Away.Points != 120.5 {
 		t.Fatalf("matchup = %+v", m)
 	}
