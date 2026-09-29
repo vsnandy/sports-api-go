@@ -1,8 +1,14 @@
 package viewer
 
 import (
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/vsnandy/sports-api-go/internal/domain"
 )
@@ -118,4 +124,117 @@ func TestWeekNav(t *testing.T) {
 	if p, n, _ := weekNav(18); p != 17 || n != 0 {
 		t.Errorf("weekNav(18) = %d %d", p, n)
 	}
+}
+
+const rootingLeagues = `{"data":[{"id":"espn:1","platform":"espn","season":2026,"name":"Office League"},{"id":"sleeper:2","platform":"sleeper","season":2026,"name":"Dynasty"},{"id":"espn:9","platform":"espn","season":2026,"name":"Broken"}],"meta":{"season":2026,"warnings":[]}}`
+
+func rootingPlayerJSON(id, name string, pts float64) string {
+	return fmt.Sprintf(`{"slot":"QB","player":{"id":%q,"name":%q,"position":"QB","nflTeam":"KC","platformIds":{}},"stats":{},"points":%g}`, id, name, pts)
+}
+
+var rootingRoutes = map[string]string{
+	"/v1/nfl/leagues":        rootingLeagues,
+	"/v1/nfl/leagues/espn:1": `{"data":{"id":"espn:1","name":"Office League","teams":[{"id":"1","name":"Team Varun","owner":"v","mine":true},{"id":"2","name":"Alex","owner":"a"}]},"meta":{"warnings":[]}}`,
+	"/v1/nfl/leagues/espn:1/matchups": `{"data":[{"week":WEEK,"home":{"teamId":"1","points":18,"roster":{"teamId":"1","starters":[` + rootingPlayerJSON("4046", "Patrick Mahomes", 18) + `],"bench":[],"reserve":[]}},
+ "away":{"teamId":"2","points":7,"roster":{"teamId":"2","starters":[` + rootingPlayerJSON("1466", "Travis Kelce", 7) + `],"bench":[],"reserve":[]}}}],"meta":{"season":2026,"week":WEEK,"warnings":[]}}`,
+	"/v1/nfl/leagues/sleeper:2": `{"data":{"id":"sleeper:2","name":"Dynasty","teams":[{"id":"5","name":"Mine","owner":"v","mine":true},{"id":"6","name":"Sam","owner":"s"}]},"meta":{"warnings":[]}}`,
+	"/v1/nfl/leagues/sleeper:2/matchups": `{"data":[{"week":WEEK,"home":{"teamId":"6","points":9.5,"roster":{"teamId":"6","starters":[` + rootingPlayerJSON("1466", "Travis Kelce", 9.5) + `],"bench":[],"reserve":[]}},
+ "away":{"teamId":"5","points":20,"roster":{"teamId":"5","starters":[` + rootingPlayerJSON("4046", "Patrick Mahomes", 20) + `],"bench":[],"reserve":[]}}}],"meta":{"season":2026,"week":WEEK,"warnings":[]}}`,
+}
+
+// newRootingHandler serves routes (WEEK replaced by ?week= or 3); any other path is a 502.
+// Matchups without include=stats are rejected, since points need stats.
+func newRootingHandler(t *testing.T, routes map[string]string) http.Handler {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, ok := routes[r.URL.Path]
+		if !ok {
+			w.WriteHeader(http.StatusBadGateway)
+			io.WriteString(w, `{"error":{"code":"upstream_error","message":"upstream down"}}`)
+			return
+		}
+		if strings.HasSuffix(r.URL.Path, "/matchups") && r.URL.Query().Get("include") != "stats" {
+			w.WriteHeader(http.StatusBadRequest)
+			io.WriteString(w, `{"error":{"code":"invalid_param","message":"include=stats missing"}}`)
+			return
+		}
+		week := r.URL.Query().Get("week")
+		if week == "" {
+			week = "3"
+		}
+		io.WriteString(w, strings.ReplaceAll(body, "WEEK", week))
+	}))
+	t.Cleanup(srv.Close)
+	return NewHandler(&Client{BaseURL: srv.URL, APIKey: "k", HTTP: &http.Client{Timeout: 5 * time.Second}})
+}
+
+func TestRootingPage(t *testing.T) {
+	code, body := get(t, newRootingHandler(t, rootingRoutes), "/rooting")
+	if code != 200 {
+		t.Fatalf("status %d: %s", code, body)
+	}
+	mustContain(t, body,
+		"<h1>Rooting guide</h1>",
+		"2026 · week 3 · 2 leagues counted",
+		`<div class="warn">Broken: upstream down</div>`,
+		`class="net pos">&#43;2<small>2 for · 0 against</small>`,
+		`class="net neg">−2<small>0 for · 2 against</small>`,
+		`class="chip for" href="/league/espn:1?week=3">Office League<b>18.00</b>`,
+		`class="chip against" href="/league/sleeper:2?week=3">Dynasty<b>9.50</b>`,
+		`PM<img src="https://sleepercdn.com/content/nfl/players/thumb/4046.jpg"`,
+		`href="?week=2"`, `href="?week=4"`,
+	)
+	if strings.Index(body, "Patrick Mahomes") > strings.Index(body, "Travis Kelce") {
+		t.Error("equal |net| and appearances should sort by name")
+	}
+}
+
+func TestRootingPassesWeek(t *testing.T) {
+	_, body := get(t, newRootingHandler(t, rootingRoutes), "/rooting?week=2")
+	mustContain(t, body, "2026 · week 2 · 2 leagues counted", `href="/league/espn:1?week=2"`)
+}
+
+func TestRootingInvalidWeek(t *testing.T) {
+	code, body := get(t, newRootingHandler(t, rootingRoutes), "/rooting?week=0")
+	if code != http.StatusBadRequest {
+		t.Fatalf("status %d", code)
+	}
+	mustContain(t, body, "Invalid week", "week must be a number from 1 to 18")
+}
+
+func TestRootingAllLeaguesFail(t *testing.T) {
+	routes := map[string]string{"/v1/nfl/leagues": `{"data":[{"id":"espn:9","platform":"espn","season":2026,"name":"Broken"}],"meta":{"season":2026,"warnings":[]}}`}
+	code, body := get(t, newRootingHandler(t, routes), "/rooting")
+	if code != http.StatusBadGateway {
+		t.Fatalf("status %d", code)
+	}
+	mustContain(t, body, "upstream down")
+}
+
+func TestRootingNoSharedPlayers(t *testing.T) {
+	routes := map[string]string{
+		"/v1/nfl/leagues":                 `{"data":[{"id":"espn:1","platform":"espn","season":2026,"name":"Office League"}],"meta":{"season":2026,"warnings":[]}}`,
+		"/v1/nfl/leagues/espn:1":          rootingRoutes["/v1/nfl/leagues/espn:1"],
+		"/v1/nfl/leagues/espn:1/matchups": rootingRoutes["/v1/nfl/leagues/espn:1/matchups"],
+	}
+	code, body := get(t, newRootingHandler(t, routes), "/rooting")
+	if code != 200 {
+		t.Fatalf("status %d", code)
+	}
+	mustContain(t, body, "No shared players this week.", "1 leagues counted")
+}
+
+func TestRootingBeforeRedeploy(t *testing.T) {
+	_, h := newTestHandler(t) // its leagues carry no mine flag; sleeper:2 is a 404
+	code, body := get(t, h, "/rooting")
+	if code != 200 {
+		t.Fatalf("status %d: %s", code, body)
+	}
+	mustContain(t, body, "Office League: couldn&#39;t find your team", "Dynasty: route not found", "No shared players this week.")
+}
+
+func TestLeaguesPageLinksRooting(t *testing.T) {
+	_, h := newTestHandler(t)
+	_, body := get(t, h, "/")
+	mustContain(t, body, `href="/rooting"`, "Rooting guide")
 }

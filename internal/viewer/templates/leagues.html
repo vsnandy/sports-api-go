@@ -1,5 +1,6 @@
 {{template "head" "Leagues"}}
 <h1>Leagues {{.Season}}</h1>
+<p><a href="/rooting">Rooting guide →</a></p>
 {{range .Warnings}}<div class="warn">{{.}}</div>{{end}}
 <div class="leagues">
 {{range .Leagues}}<a class="league-card" href="{{.Href}}"><span>{{.Name}}</span><span class="badge {{.Platform}}">{{if eq .Platform "espn"}}ESPN{{else}}Sleeper{{end}}</span></a>
