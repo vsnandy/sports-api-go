@@ -1,4 +1,4 @@
-.PHONY: test run build deploy smoke tf-init scoreaudit
+.PHONY: test run build deploy smoke tf-init scoreaudit viewer
 
 test:
 	go test ./...
@@ -25,3 +25,7 @@ smoke:
 
 scoreaudit:
 	go run ./cmd/scoreaudit -season 2026 -weeks 1-3 $(ARGS)
+
+viewer:
+	@test -f .env || { echo "create .env from .env.example first"; exit 1; }
+	set -a && . ./.env && set +a && go run ./cmd/viewer

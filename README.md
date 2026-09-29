@@ -37,6 +37,18 @@ League IDs look like `espn:123456` or `sleeper:987654321`.
   environment, or the SSM parameters) and exits non-zero when fewer than 98% of
   player-weeks match exactly.
 
+
+## League viewer
+
+A local, read-only page for your leagues: matchups by week, each player's points and how they were earned, and each league's scoring rules.
+
+```bash
+cp .env.example .env   # fill in API_URL and API_KEY (commands in the file)
+make viewer            # then open http://127.0.0.1:8081
+```
+
+It listens on 127.0.0.1 only and calls the API from the Go process, so the API key never reaches the browser.
+
 ## Run locally
 
 ```bash
