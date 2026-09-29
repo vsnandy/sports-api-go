@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/vsnandy/sports-api-go/internal/domain"
 )
@@ -14,6 +15,7 @@ import (
 type statRow struct {
 	Label  string
 	Points float64
+	Gain   bool
 }
 
 type playerView struct {
@@ -23,6 +25,10 @@ type playerView struct {
 	Breakdown           []statRow
 	Total               float64
 	Stats               string
+	Image               string // headshot or team logo URL; empty when unknown
+	Initials            string // shown under the image, and alone when there is none
+	IsDEF               bool
+	Bench               bool
 }
 
 type sideView struct {
@@ -30,6 +36,7 @@ type sideView struct {
 	Points   float64
 	Starters []playerView
 	Bench    []playerView
+	Leading  bool
 }
 
 type matchupView struct{ Home, Away sideView }
@@ -74,7 +81,10 @@ func buildLeagueView(lg domain.League, ms []domain.Matchup, meta Meta) leagueVie
 		v.Weeks = append(v.Weeks, w)
 	}
 	for _, m := range ms {
-		v.Matchups = append(v.Matchups, matchupView{Home: buildSide(m.Home, names), Away: buildSide(m.Away, names)})
+		home, away := buildSide(m.Home, names), buildSide(m.Away, names)
+		home.Leading = home.Points >= away.Points
+		away.Leading = away.Points >= home.Points
+		v.Matchups = append(v.Matchups, matchupView{Home: home, Away: away})
 	}
 	v.Rules = rules(lg.Scoring)
 	positions := make([]string, 0, len(lg.ScoringByPosition))
@@ -101,13 +111,16 @@ func buildSide(s domain.MatchupSide, names map[string]string) sideView {
 		sv.Starters = append(sv.Starters, buildPlayer(e))
 	}
 	for _, e := range append(slices.Clone(s.Roster.Bench), s.Roster.Reserve...) {
-		sv.Bench = append(sv.Bench, buildPlayer(e))
+		pv := buildPlayer(e)
+		pv.Bench = true
+		sv.Bench = append(sv.Bench, pv)
 	}
 	return sv
 }
 
 func buildPlayer(e domain.RosterEntry) playerView {
 	pv := playerView{Slot: e.Slot, Name: e.Player.Name, NFLTeam: e.Player.NFLTeam, Points: e.Points}
+	pv.Image, pv.Initials, pv.IsDEF = playerImage(e.Player), Initials(e.Player.Name), e.Player.Position == "DEF"
 	switch e.PointsSource {
 	case "platform":
 		pv.Source = "ESPN"
@@ -133,7 +146,7 @@ func breakdownRows(b map[string]float64) ([]statRow, float64) {
 	rows := make([]statRow, 0, len(b))
 	var total float64
 	for k, v := range b {
-		rows = append(rows, statRow{Label: Label(k), Points: v})
+		rows = append(rows, statRow{Label: Label(k), Points: v, Gain: v > 0})
 		total += v
 	}
 	slices.SortFunc(rows, func(a, b statRow) int {
@@ -168,4 +181,80 @@ func rangeText(d domain.DerivedStat) string {
 	default:
 		return fmt.Sprintf("%g–%g", d.Min, *d.Max)
 	}
+}
+
+const (
+	sleeperHeadshot = "https://sleepercdn.com/content/nfl/players/thumb/"
+	sleeperLogo     = "https://sleepercdn.com/images/team_logos/nfl/"
+	espnHeadshot    = "https://a.espncdn.com/i/headshots/nfl/players/full/"
+)
+
+// playerImage picks a team logo for D/ST, else a Sleeper or ESPN headshot. IDs must be
+// all digits (team codes all letters) so nothing untrusted reaches an image URL.
+func playerImage(p domain.Player) string {
+	if p.Position == "DEF" {
+		team := p.NFLTeam
+		if team == "" && p.ID != nil {
+			team = *p.ID
+		}
+		if allLetters(team) {
+			return sleeperLogo + strings.ToLower(team) + ".png"
+		}
+		return ""
+	}
+	if p.ID != nil && allDigits(*p.ID) {
+		return sleeperHeadshot + *p.ID + ".jpg"
+	}
+	if e := p.PlatformIDs["espn"]; allDigits(e) {
+		return espnHeadshot + e + ".png"
+	}
+	return ""
+}
+
+// Initials returns the first letters of a name's first and last words ("A.J. Brown" → "AB").
+func Initials(name string) string {
+	var words []string
+	for _, w := range strings.Fields(name) {
+		letters := strings.Map(func(r rune) rune {
+			if unicode.IsLetter(r) {
+				return unicode.ToUpper(r)
+			}
+			return -1
+		}, w)
+		if letters != "" {
+			words = append(words, letters)
+		}
+	}
+	first := func(s string) string { return string([]rune(s)[0]) }
+	switch len(words) {
+	case 0:
+		return "?"
+	case 1:
+		return first(words[0])
+	}
+	return first(words[0]) + first(words[len(words)-1])
+}
+
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func allLetters(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z') {
+			return false
+		}
+	}
+	return true
 }
