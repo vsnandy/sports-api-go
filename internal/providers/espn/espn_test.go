@@ -83,13 +83,20 @@ func TestLeague(t *testing.T) {
 	if !reflect.DeepEqual(l.RosterSlots, wantSlots) {
 		t.Errorf("RosterSlots = %v", l.RosterSlots)
 	}
-	wantRules := domain.ScoringRules{"pass_yd": 0.04, "pass_td": 4, "rec": 1, "fgm_0_19": 3, "fgm_20_29": 3, "fgm_30_39": 3}
+	wantRules := domain.ScoringRules{"pass_yd": 0.04, "pass_td": 4, "rec": 1, "fgm_0_19": 3, "fgm_20_29": 3, "fgm_30_39": 3, "espn_pa_14_17": 1}
 	if !reflect.DeepEqual(l.Scoring, wantRules) {
 		t.Errorf("Scoring = %v", l.Scoring)
 	}
-	wantUnsupported := []string{"espn stat 53 position overrides", "espn stat 92 (1 pts)"}
-	if !reflect.DeepEqual(l.UnsupportedRules, wantUnsupported) {
-		t.Errorf("UnsupportedRules = %v", l.UnsupportedRules)
+	if !reflect.DeepEqual(l.ScoringByPosition, map[string]domain.ScoringRules{"TE": {"rec": 1.5}}) {
+		t.Errorf("ScoringByPosition = %v", l.ScoringByPosition)
+	}
+	seventeen := 17.0
+	wantDerived := []domain.DerivedStat{{Key: "espn_pa_14_17", From: "pts_allow", Min: 14, Max: &seventeen}}
+	if !reflect.DeepEqual(l.DerivedStats, wantDerived) {
+		t.Errorf("DerivedStats = %+v", l.DerivedStats)
+	}
+	if l.UnsupportedRules == nil || len(l.UnsupportedRules) != 0 {
+		t.Errorf("UnsupportedRules = %#v, want empty non-nil", l.UnsupportedRules)
 	}
 	if v := rec.last()["view"]; !slices.Contains(v, "mSettings") || !slices.Contains(v, "mTeam") {
 		t.Errorf("views = %v", v)

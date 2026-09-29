@@ -48,6 +48,57 @@ var statKeys = map[int][]string{
 	72: {"fum_lost"},
 	74: {"fgm_50p"}, 77: {"fgm_40_49"}, 80: {"fgm_0_19", "fgm_20_29", "fgm_30_39"},
 	85: {"fgmiss"}, 86: {"xpm"}, 88: {"xpmiss"},
-	89: {"pts_allow_0"}, 90: {"pts_allow_1_6"}, 91: {"pts_allow_7_13"},
 	95: {"int"}, 96: {"fum_rec"}, 97: {"blk_kick"}, 98: {"safe"}, 99: {"sack"},
+	120: {"pts_allow"}, 127: {"yds_allow"},
+}
+
+// tier is an ESPN stat that scores a range of a raw stat, as a derived indicator.
+type tier struct {
+	key  string
+	from string
+	min  float64
+	max  *float64 // nil = unbounded
+}
+
+func upTo(v float64) *float64 { return &v }
+
+// tiers maps ESPN points-allowed and yards-allowed stat IDs to inclusive ranges of
+// Sleeper's raw pts_allow / yds_allow.
+var tiers = map[int]tier{
+	89:  {"espn_pa_0", "pts_allow", 0, upTo(0)},
+	90:  {"espn_pa_1_6", "pts_allow", 1, upTo(6)},
+	91:  {"espn_pa_7_13", "pts_allow", 7, upTo(13)},
+	92:  {"espn_pa_14_17", "pts_allow", 14, upTo(17)},
+	121: {"espn_pa_18_21", "pts_allow", 18, upTo(21)},
+	122: {"espn_pa_22_27", "pts_allow", 22, upTo(27)},
+	123: {"espn_pa_28_34", "pts_allow", 28, upTo(34)},
+	124: {"espn_pa_35_45", "pts_allow", 35, upTo(45)},
+	125: {"espn_pa_46p", "pts_allow", 46, nil},
+	128: {"espn_ya_0_99", "yds_allow", 0, upTo(99)},
+	129: {"espn_ya_100_199", "yds_allow", 100, upTo(199)},
+	130: {"espn_ya_200_299", "yds_allow", 200, upTo(299)},
+	131: {"espn_ya_300_349", "yds_allow", 300, upTo(349)},
+	132: {"espn_ya_350_399", "yds_allow", 350, upTo(399)},
+	133: {"espn_ya_400_449", "yds_allow", 400, upTo(449)},
+	134: {"espn_ya_450_499", "yds_allow", 450, upTo(499)},
+	135: {"espn_ya_500_549", "yds_allow", 500, upTo(549)},
+	136: {"espn_ya_550p", "yds_allow", 550, nil},
+}
+
+// overrideSlots maps pointsOverrides keys (lineup slot IDs) to Sleeper positions.
+var overrideSlots = map[string]string{"0": "QB", "2": "RB", "4": "WR", "6": "TE", "16": "DEF", "17": "K"}
+
+// ESPNStatIDForKey returns the ESPN stat ID a Sleeper or derived stat key came from.
+func ESPNStatIDForKey(key string) (int, bool) {
+	for id, t := range tiers {
+		if t.key == key {
+			return id, true
+		}
+	}
+	for id, keys := range statKeys {
+		if slices.Contains(keys, key) {
+			return id, true
+		}
+	}
+	return 0, false
 }

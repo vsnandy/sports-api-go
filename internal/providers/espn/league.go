@@ -98,12 +98,13 @@ func (c *Client) League(ctx context.Context, nativeID string, season int) (domai
 		}
 		teams = append(teams, domain.Team{ID: strconv.Itoa(t.ID), Name: t.displayName(), Owner: owner})
 	}
-	rules, unsupported := convertScoring(l.Settings.ScoringSettings.ScoringItems)
+	conv := convertScoring(l.Settings.ScoringSettings.ScoringItems)
 	return domain.League{
 		ID: domain.LeagueID(domain.PlatformESPN, nativeID), Platform: domain.PlatformESPN,
 		Sport: domain.SportNFL, Season: season, Name: l.Settings.Name, Teams: teams,
-		Scoring: rules, UnsupportedRules: unsupported,
-		RosterSlots: rosterSlots(l.Settings.RosterSettings.LineupSlotCounts),
+		Scoring: conv.rules, ScoringByPosition: conv.byPosition, DerivedStats: conv.derived,
+		UnsupportedRules: conv.unsupported,
+		RosterSlots:      rosterSlots(l.Settings.RosterSettings.LineupSlotCounts),
 	}, nil
 }
 
@@ -192,25 +193,52 @@ func rosterSlots(counts map[string]int) []string {
 	return out
 }
 
-// convertScoring translates ESPN scoring items into Sleeper-keyed rules. Items with
-// no mapping, and per-position overrides (which flat rules cannot express), are
-// reported as unsupported.
-func convertScoring(items []scoringItemJSON) (domain.ScoringRules, []string) {
-	rules := domain.ScoringRules{}
-	unsupported := []string{}
+type convertedScoring struct {
+	rules       domain.ScoringRules
+	byPosition  map[string]domain.ScoringRules
+	derived     []domain.DerivedStat
+	unsupported []string
+}
+
+// convertScoring translates ESPN scoring items into the engine's model: per-unit
+// stats become base rules, tier stats become derived indicators, and pointsOverrides
+// become per-position replacements. Anything untranslatable is reported.
+func convertScoring(items []scoringItemJSON) convertedScoring {
+	c := convertedScoring{
+		rules:       domain.ScoringRules{},
+		byPosition:  map[string]domain.ScoringRules{},
+		derived:     []domain.DerivedStat{},
+		unsupported: []string{},
+	}
 	for _, it := range items {
-		keys, ok := statKeys[it.StatID]
-		if !ok {
-			unsupported = append(unsupported, fmt.Sprintf("espn stat %d (%g pts)", it.StatID, it.Points))
+		var keys []string
+		if t, ok := tiers[it.StatID]; ok {
+			keys = []string{t.key}
+			c.derived = append(c.derived, domain.DerivedStat{Key: t.key, From: t.from, Min: t.min, Max: t.max})
+		} else if ks, ok := statKeys[it.StatID]; ok {
+			keys = ks
+		} else {
+			c.unsupported = append(c.unsupported, fmt.Sprintf("espn stat %d (%g pts)", it.StatID, it.Points))
 			continue
 		}
 		for _, k := range keys {
-			rules[k] = it.Points
+			c.rules[k] = it.Points
 		}
-		if len(it.PointsOverrides) > 0 {
-			unsupported = append(unsupported, fmt.Sprintf("espn stat %d position overrides", it.StatID))
+		for slot, pts := range it.PointsOverrides {
+			pos, ok := overrideSlots[slot]
+			if !ok {
+				c.unsupported = append(c.unsupported, fmt.Sprintf("espn stat %d override for slot %s", it.StatID, slot))
+				continue
+			}
+			if c.byPosition[pos] == nil {
+				c.byPosition[pos] = domain.ScoringRules{}
+			}
+			for _, k := range keys {
+				c.byPosition[pos][k] = pts
+			}
 		}
 	}
-	sort.Strings(unsupported)
-	return rules, unsupported
+	sort.Strings(c.unsupported)
+	slices.SortFunc(c.derived, func(a, b domain.DerivedStat) int { return cmp.Compare(a.Key, b.Key) })
+	return c
 }
