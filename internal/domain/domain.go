@@ -64,6 +64,9 @@ type DerivedStat struct {
 	From string   `json:"from"`
 	Min  float64  `json:"min"`
 	Max  *float64 `json:"max"`
+	// Step, when > 0, sets Key to the number of whole Steps in From (e.g. every
+	// 25 passing yards) instead of an in-range indicator; Min and Max are ignored.
+	Step float64 `json:"step,omitempty"`
 }
 
 // ScoringModel assembles the league's scoring for the engine.

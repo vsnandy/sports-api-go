@@ -46,10 +46,14 @@ var statKeys = map[int][]string{
 	24: {"rush_yd"}, 25: {"rush_td"}, 26: {"rush_2pt"},
 	42: {"rec_yd"}, 43: {"rec_td"}, 44: {"rec_2pt"}, 53: {"rec"},
 	72: {"fum_lost"},
-	74: {"fgm_50p"}, 77: {"fgm_40_49"}, 80: {"fgm_0_19", "fgm_20_29", "fgm_30_39"},
+	74: {"fgm_50p"}, 77: {"fgm_40_49"}, 79: {"fgmiss_40_49"}, 80: {"fgm_0_19", "fgm_20_29", "fgm_30_39"},
 	85: {"fgmiss"}, 86: {"xpm"}, 88: {"xpmiss"},
-	95: {"int"}, 96: {"fum_rec"}, 97: {"blk_kick"}, 98: {"safe"}, 99: {"sack"},
+	95: {"int"}, 96: {"fum_rec", "def_st_fum_rec"}, 97: {"blk_kick"}, 98: {"safe"}, 99: {"sack"},
+	101: {"def_st_td"}, 102: {"def_st_td"},
+	103: {"def_td"}, 104: {"def_td"},
 	120: {"pts_allow"}, 127: {"yds_allow"},
+	198: {"fgm_50_59"},
+	201: {"fgm_60p"},
 }
 
 // tier is an ESPN stat that scores a range of a raw stat, as a derived indicator.
@@ -85,20 +89,47 @@ var tiers = map[int]tier{
 	136: {"espn_ya_550p", "yds_allow", 550, nil},
 }
 
+// stepStat is an ESPN stat that scores every Step units of a raw stat.
+type stepStat struct {
+	key  string
+	from string
+	step float64
+}
+
+var steps = map[int]stepStat{
+	8: {"espn_pass_yd_per_25", "pass_yd", 25},
+}
+
 // overrideSlots maps pointsOverrides keys (lineup slot IDs) to Sleeper positions.
 var overrideSlots = map[string]string{"0": "QB", "2": "RB", "4": "WR", "6": "TE", "16": "DEF", "17": "K"}
 
-// ESPNStatIDForKey returns the ESPN stat ID a Sleeper or derived stat key came from.
+// ESPNStatIDForKey returns the lowest ESPN stat ID a Sleeper or derived stat key came
+// from. Several IDs can share a key (e.g. 101 and 102 both feed def_st_td), so the
+// result must be deterministic.
 func ESPNStatIDForKey(key string) (int, bool) {
+	best := -1
+	consider := func(id int) {
+		if best == -1 || id < best {
+			best = id
+		}
+	}
 	for id, t := range tiers {
 		if t.key == key {
-			return id, true
+			consider(id)
+		}
+	}
+	for id, s := range steps {
+		if s.key == key {
+			consider(id)
 		}
 	}
 	for id, keys := range statKeys {
 		if slices.Contains(keys, key) {
-			return id, true
+			consider(id)
 		}
 	}
-	return 0, false
+	if best == -1 {
+		return 0, false
+	}
+	return best, true
 }

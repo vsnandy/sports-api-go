@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strconv"
@@ -229,9 +230,19 @@ type convertedScoring struct {
 	unsupported []string
 }
 
+// keyFirst records the stat ID that first set a Sleeper key, and the base/override
+// values it set, so later stat IDs sharing that key can be checked for conflicts.
+type keyFirst struct {
+	id        int
+	base      float64
+	overrides map[string]float64 // position -> points
+}
+
 // convertScoring translates ESPN scoring items into the engine's model: per-unit
-// stats become base rules, tier stats become derived indicators, and pointsOverrides
-// become per-position replacements. Anything untranslatable is reported.
+// stats become base rules, tier and step stats become derived indicators, and
+// pointsOverrides become per-position replacements. Anything untranslatable is
+// reported. When several stat IDs map to the same Sleeper key, the first one seen
+// wins and later conflicting values are reported rather than silently overwriting it.
 func convertScoring(items []scoringItemJSON) convertedScoring {
 	c := convertedScoring{
 		rules:       domain.ScoringRules{},
@@ -239,31 +250,66 @@ func convertScoring(items []scoringItemJSON) convertedScoring {
 		derived:     []domain.DerivedStat{},
 		unsupported: []string{},
 	}
+	firsts := map[string]*keyFirst{}
 	for _, it := range items {
 		var keys []string
 		if t, ok := tiers[it.StatID]; ok {
 			keys = []string{t.key}
 			c.derived = append(c.derived, domain.DerivedStat{Key: t.key, From: t.from, Min: t.min, Max: t.max})
+		} else if s, ok := steps[it.StatID]; ok {
+			keys = []string{s.key}
+			c.derived = append(c.derived, domain.DerivedStat{Key: s.key, From: s.from, Step: s.step})
 		} else if ks, ok := statKeys[it.StatID]; ok {
 			keys = ks
 		} else {
 			c.unsupported = append(c.unsupported, fmt.Sprintf("espn stat %d (%g pts)", it.StatID, it.Points))
 			continue
 		}
-		for _, k := range keys {
-			c.rules[k] = it.Points
-		}
+
+		overrides := map[string]float64{}
 		for slot, pts := range it.PointsOverrides {
 			pos, ok := overrideSlots[slot]
 			if !ok {
 				c.unsupported = append(c.unsupported, fmt.Sprintf("espn stat %d override for slot %s", it.StatID, slot))
 				continue
 			}
-			if c.byPosition[pos] == nil {
-				c.byPosition[pos] = domain.ScoringRules{}
+			overrides[pos] = pts
+		}
+
+		for _, k := range keys {
+			f, seen := firsts[k]
+			if !seen {
+				firsts[k] = &keyFirst{id: it.StatID, base: it.Points, overrides: maps.Clone(overrides)}
+				c.rules[k] = it.Points
+				for pos, pts := range overrides {
+					if c.byPosition[pos] == nil {
+						c.byPosition[pos] = domain.ScoringRules{}
+					}
+					c.byPosition[pos][k] = pts
+				}
+				continue
 			}
-			for _, k := range keys {
-				c.byPosition[pos][k] = pts
+			conflict := f.base != it.Points
+			if !conflict {
+				for pos, pts := range overrides {
+					if existing, has := f.overrides[pos]; has && existing != pts {
+						conflict = true
+						break
+					}
+				}
+			}
+			if conflict {
+				c.unsupported = append(c.unsupported, fmt.Sprintf("espn stats %d and %d both map to %s with different points", f.id, it.StatID, k))
+				continue
+			}
+			for pos, pts := range overrides {
+				if _, has := f.overrides[pos]; !has {
+					f.overrides[pos] = pts
+					if c.byPosition[pos] == nil {
+						c.byPosition[pos] = domain.ScoringRules{}
+					}
+					c.byPosition[pos][k] = pts
+				}
 			}
 		}
 	}

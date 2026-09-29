@@ -49,12 +49,16 @@ type Scoring struct {
 }
 
 type DerivedStat struct {
-    Key  string   `json:"key"`  // e.g. "espn_pa_14_17"
-    From string   `json:"from"` // raw stat key, e.g. "pts_allow"
-    Min  float64  `json:"min"`  // inclusive
-    Max  *float64 `json:"max"`  // inclusive; nil = unbounded
+    Key  string   `json:"key"`            // e.g. "espn_pa_14_17"
+    From string   `json:"from"`           // raw stat key, e.g. "pts_allow"
+    Min  float64  `json:"min"`            // inclusive
+    Max  *float64 `json:"max"`            // inclusive; nil = unbounded
+    Step float64  `json:"step,omitempty"` // > 0: Key = floor(From / Step) instead of a range indicator; Min/Max ignored
 }
 ```
+
+Task 5a: `Step` supports "every N units" stats confirmed by the live audit (e.g. ESPN
+stat 8, "every 25 passing yards" → `espn_pass_yd_per_25`, `From: "pass_yd"`).
 
 - `domain.League` keeps `Scoring ScoringRules \`json:"scoring"\`` and gains
   `ScoringByPosition map[string]ScoringRules \`json:"scoringByPosition"\`` and
@@ -119,9 +123,23 @@ type DerivedStat struct {
 - **`pointsOverrides`**: keys are lineup slot IDs, translated to positions
   (0→QB, 2→RB, 4→WR, 6→TE, 16→DEF, 17→K) into `ByPosition[pos][key]`. Other slot keys
   → `unsupported` entry `espn stat <id> override for slot <slot>`.
-- Unknown stat IDs (e.g. 198, 209) → `unsupported` as today.
+- Unknown stat IDs (e.g. 206, 209, 63, 93) → `unsupported` as today.
 - Exported for the audit: `func ESPNStatIDForKey(key string) (int, bool)` covering direct
   and derived keys.
+
+Task 5a additions, confirmed by the live scoring audit:
+- **Step stats**: ESPN 8 ("every 25 passing yards") → `DerivedStat{Key: "espn_pass_yd_per_25",
+  From: "pass_yd", Step: 25}` via a `steps` table (checked after `tiers`, before `statKeys`).
+- **Direct mappings added to `statKeys`**: 79 → `fgmiss_40_49`; 96 → `fum_rec`,
+  `def_st_fum_rec` (replacing the old single-key entry); 101, 102 → `def_st_td`;
+  103, 104 → `def_td`; 198 → `fgm_50_59`; 201 → `fgm_60p`.
+- **Shared-key guard**: several stat IDs now map to the same Sleeper key (e.g. 101/102 →
+  `def_st_td`). `convertScoring` keeps the first stat ID's base points and per-position
+  overrides for a key; a later ID with a different base or override value for the same
+  position is reported (`"espn stats %d and %d both map to %s with different points"`)
+  instead of silently overwriting it. Identical values produce no message.
+- `ESPNStatIDForKey` now returns the lowest matching stat ID across `tiers`, `steps`, and
+  `statKeys`, since keys can have more than one ID.
 
 ## 5. Audit Tool
 

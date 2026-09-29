@@ -46,7 +46,16 @@ func withDerived(stats map[string]float64, derived []domain.DerivedStat) map[str
 	maps.Copy(out, stats)
 	for _, d := range derived {
 		v, ok := stats[d.From]
-		if ok && v >= d.Min && (d.Max == nil || v <= *d.Max) {
+		if !ok {
+			continue
+		}
+		if d.Step > 0 {
+			if n := math.Floor(v / d.Step); n != 0 {
+				out[d.Key] = n
+			}
+			continue
+		}
+		if v >= d.Min && (d.Max == nil || v <= *d.Max) {
 			out[d.Key] = 1
 		}
 	}

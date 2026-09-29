@@ -42,6 +42,7 @@ func TestConvertScoringRealLeague(t *testing.T) {
 		"int": 2, "fum_rec": 2, "blk_kick": 2, "safe": 2, "sack": 1,
 		"espn_ya_0_99": 5, "espn_ya_100_199": 3, "espn_ya_200_299": 2, "espn_ya_350_399": -1,
 		"espn_ya_400_449": -3, "espn_ya_450_499": -5, "espn_ya_500_549": -6, "espn_ya_550p": -7,
+		"def_st_fum_rec": 2, "def_st_td": 6, "def_td": 6,
 	}
 	if !reflect.DeepEqual(c.byPosition, map[string]domain.ScoringRules{"DEF": wantDEF}) {
 		t.Errorf("byPosition = %v", c.byPosition)
@@ -49,9 +50,15 @@ func TestConvertScoringRealLeague(t *testing.T) {
 	if len(c.derived) != 15 {
 		t.Errorf("derived = %d stats, want 15 (only tiers present in the league)", len(c.derived))
 	}
+	for k, want := range map[string]float64{
+		"fgm_50_59": 5, "fgm_60p": 6, "def_td": 6, "def_st_td": 6,
+	} {
+		if got, ok := c.rules[k]; !ok || got != want {
+			t.Errorf("rules[%s] = %v (present %v), want %v", k, got, ok, want)
+		}
+	}
 	wantUnsupported := []string{
-		"espn stat 101 (6 pts)", "espn stat 102 (6 pts)", "espn stat 103 (6 pts)", "espn stat 104 (6 pts)",
-		"espn stat 198 (5 pts)", "espn stat 201 (6 pts)", "espn stat 206 (2 pts)", "espn stat 209 (1 pts)",
+		"espn stat 206 (2 pts)", "espn stat 209 (1 pts)",
 		"espn stat 63 (6 pts)", "espn stat 93 (6 pts)",
 	}
 	if !reflect.DeepEqual(c.unsupported, wantUnsupported) {
@@ -120,12 +127,58 @@ func TestConvertScoringUnknownOverrideSlot(t *testing.T) {
 }
 
 func TestESPNStatIDForKey(t *testing.T) {
-	for key, want := range map[string]int{"pass_yd": 3, "fgm_20_29": 80, "sack": 99, "pts_allow": 120, "yds_allow": 127} {
+	for key, want := range map[string]int{
+		"pass_yd": 3, "fgm_20_29": 80, "sack": 99, "pts_allow": 120, "yds_allow": 127,
+		"fgm_50_59": 198, "fgm_60p": 201, "fgmiss_40_49": 79, "def_st_fum_rec": 96,
+		"def_st_td": 101, "def_td": 103, "espn_pass_yd_per_25": 8,
+	} {
 		if id, ok := ESPNStatIDForKey(key); !ok || id != want {
 			t.Errorf("ESPNStatIDForKey(%s) = %d, %v; want %d", key, id, ok, want)
 		}
 	}
 	if _, ok := ESPNStatIDForKey("pts_allow_14_20"); ok {
 		t.Error("Sleeper bucket keys are no longer ESPN mappings")
+	}
+}
+
+func TestConvertScoringSharedKeyConflict(t *testing.T) {
+	c := convertScoring([]scoringItemJSON{
+		{StatID: 101, Points: 6},
+		{StatID: 102, Points: 4},
+	})
+	if !reflect.DeepEqual(c.unsupported, []string{"espn stats 101 and 102 both map to def_st_td with different points"}) {
+		t.Errorf("unsupported = %v", c.unsupported)
+	}
+	if c.rules["def_st_td"] != 6 {
+		t.Errorf("rules[def_st_td] = %v, want 6 (first value kept)", c.rules["def_st_td"])
+	}
+
+	c2 := convertScoring([]scoringItemJSON{
+		{StatID: 101, Points: 6},
+		{StatID: 102, Points: 6},
+	})
+	if len(c2.unsupported) != 0 {
+		t.Errorf("unsupported = %v, want none (same values)", c2.unsupported)
+	}
+}
+
+func TestConvertScoringStepStat(t *testing.T) {
+	c := convertScoring([]scoringItemJSON{{StatID: 8, Points: 1}})
+	want := domain.DerivedStat{Key: "espn_pass_yd_per_25", From: "pass_yd", Step: 25}
+	found := false
+	for _, d := range c.derived {
+		if d == want {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("derived = %v, want to contain %+v", c.derived, want)
+	}
+	if c.rules["espn_pass_yd_per_25"] != 1 {
+		t.Errorf("rules[espn_pass_yd_per_25] = %v, want 1", c.rules["espn_pass_yd_per_25"])
+	}
+	s := domain.Scoring{Rules: c.rules, ByPosition: c.byPosition, Derived: c.derived}
+	if got := scoring.Points(map[string]float64{"pass_yd": 203}, s, "QB"); got != 8 {
+		t.Errorf("Points = %v, want 8", got)
 	}
 }

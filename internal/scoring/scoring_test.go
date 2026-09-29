@@ -122,6 +122,39 @@ func TestDerivedStats(t *testing.T) {
 	}
 }
 
+func TestDerivedStepStats(t *testing.T) {
+	s := domain.Scoring{
+		Rules: domain.ScoringRules{"espn_pass_yd_per_25": 1},
+		Derived: []domain.DerivedStat{
+			{Key: "espn_pass_yd_per_25", From: "pass_yd", Step: 25},
+		},
+	}
+	tests := []struct {
+		name  string
+		stats map[string]float64
+		want  float64
+	}{
+		{"below one step", map[string]float64{"pass_yd": 24}, 0},
+		{"exactly one step", map[string]float64{"pass_yd": 25}, 1},
+		{"just under two steps", map[string]float64{"pass_yd": 49}, 1},
+		{"exactly two steps", map[string]float64{"pass_yd": 50}, 2},
+		{"eight steps", map[string]float64{"pass_yd": 203}, 8},
+		{"missing raw stat", map[string]float64{"rush_yd": 10}, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := Points(tt.stats, s, "QB"); got != tt.want {
+				t.Fatalf("Points = %v, want %v", got, tt.want)
+			}
+		})
+	}
+	in := map[string]float64{"pass_yd": 203}
+	Points(in, s, "QB")
+	if _, leaked := in["espn_pass_yd_per_25"]; leaked {
+		t.Error("Points must not write derived stats into the caller's map")
+	}
+}
+
 func TestBreakdownSumsToPoints(t *testing.T) {
 	s := domain.Scoring{
 		Rules:      domain.ScoringRules{"pass_yd": 0.04, "pass_td": 4},
