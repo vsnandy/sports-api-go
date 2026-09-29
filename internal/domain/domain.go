@@ -45,6 +45,7 @@ type Team struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`
 	Owner string `json:"owner"`
+	Mine  bool   `json:"mine"` // the configured user's team
 }
 
 // ScoringRules maps a Sleeper stat key to points per unit of that stat.

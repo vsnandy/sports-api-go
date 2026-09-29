@@ -125,7 +125,8 @@ func (c *Client) League(ctx context.Context, nativeID string, season int) (domai
 		if len(t.Owners) > 0 {
 			owner = names[t.Owners[0]]
 		}
-		teams = append(teams, domain.Team{ID: strconv.Itoa(t.ID), Name: t.displayName(), Owner: owner})
+		mine := c.swid != "" && slices.ContainsFunc(t.Owners, func(o string) bool { return normSWID(o) == c.swid })
+		teams = append(teams, domain.Team{ID: strconv.Itoa(t.ID), Name: t.displayName(), Owner: owner, Mine: mine})
 	}
 	conv := convertScoring(l.Settings.ScoringSettings.ScoringItems)
 	return domain.League{
@@ -394,4 +395,10 @@ func breakdownFromApplied(applied map[string]float64) map[string]float64 {
 		out[espnKeyForID(id)] += v
 	}
 	return out
+}
+
+// normSWID drops the braces ESPN wraps GUIDs in and lowercases, so the SWID cookie and a
+// team owner's member ID compare equal however either is written.
+func normSWID(s string) string {
+	return strings.ToLower(strings.Trim(strings.TrimSpace(s), "{}"))
 }
