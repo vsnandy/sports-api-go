@@ -21,6 +21,22 @@ All `/v1` routes require `X-API-Key`.
 
 League IDs look like `espn:123456` or `sleeper:987654321`.
 
+## Scoring and points
+
+- Matchups with `?include=stats`: each player has `points` and `pointsSource`.
+  `pointsSource` is `"platform"` when `points` is the league platform's own number
+  (ESPN leagues), or `"computed"` when it's the engine's own points from Sleeper
+  stats plus the league's rules (Sleeper leagues, or when ESPN omits a player's week
+  row). Both fields are omitted when `points` is null.
+- League detail: `scoring` is the base per-stat rules; `scoringByPosition` holds
+  per-position replacements (e.g. ESPN's D/ST scoring); `derivedStats` are tier/step
+  stats computed from raw stats (e.g. points-allowed tiers); `unsupportedRules` lists
+  scoring rules the engine couldn't translate.
+- `make scoreaudit ARGS='-league espn:<id> ...'` compares the engine's points with
+  ESPN's own, per stat ID. It needs ESPN cookies (`ESPN_S2`/`ESPN_SWID` in the
+  environment, or the SSM parameters) and exits non-zero when fewer than 98% of
+  player-weeks match exactly.
+
 ## Run locally
 
 ```bash
