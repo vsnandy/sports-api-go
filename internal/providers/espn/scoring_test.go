@@ -180,6 +180,31 @@ func TestConvertScoringSharedKeyConflict(t *testing.T) {
 	}
 }
 
+// The shared-key guard must compare effective (per-position) values, not just bases:
+// a later stat ID with no override for a position that the first stat ID overrides
+// still has a different effective value there.
+func TestConvertScoringSharedKeyConflictEffectiveValue(t *testing.T) {
+	c := convertScoring([]scoringItemJSON{
+		{StatID: 101, Points: 0, PointsOverrides: map[string]float64{"16": 6}},
+		{StatID: 102, Points: 0},
+	})
+	wantUnsupported := []string{
+		"espn stats 101 and 102 both map to def_st_td with different points",
+		"espn stats 101 and 102 both map to st_td with different points",
+	}
+	if !reflect.DeepEqual(c.unsupported, wantUnsupported) {
+		t.Errorf("unsupported = %v, want %v", c.unsupported, wantUnsupported)
+	}
+
+	c2 := convertScoring([]scoringItemJSON{
+		{StatID: 101, Points: 6, PointsOverrides: map[string]float64{"16": 6}},
+		{StatID: 102, Points: 6},
+	})
+	if len(c2.unsupported) != 0 {
+		t.Errorf("unsupported = %v, want none (equal effective values)", c2.unsupported)
+	}
+}
+
 func TestConvertScoringStepStat(t *testing.T) {
 	c := convertScoring([]scoringItemJSON{{StatID: 8, Points: 1}})
 	want := domain.DerivedStat{Key: "espn_pass_yd_per_25", From: "pass_yd", Step: 25}

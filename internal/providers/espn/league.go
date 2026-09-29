@@ -291,8 +291,23 @@ func convertScoring(items []scoringItemJSON) convertedScoring {
 			}
 			conflict := f.base != it.Points
 			if !conflict {
-				for pos, pts := range overrides {
-					if existing, has := f.overrides[pos]; has && existing != pts {
+				union := map[string]struct{}{}
+				for pos := range f.overrides {
+					union[pos] = struct{}{}
+				}
+				for pos := range overrides {
+					union[pos] = struct{}{}
+				}
+				for pos := range union {
+					effFirst := f.base
+					if v, ok := f.overrides[pos]; ok {
+						effFirst = v
+					}
+					effCur := it.Points
+					if v, ok := overrides[pos]; ok {
+						effCur = v
+					}
+					if effFirst != effCur {
 						conflict = true
 						break
 					}
