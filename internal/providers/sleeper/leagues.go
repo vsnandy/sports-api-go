@@ -114,7 +114,8 @@ func (c *Client) League(ctx context.Context, nativeID string, _ int) (domain.Lea
 	return domain.League{
 		ID: domain.LeagueID(domain.PlatformSleeper, nativeID), Platform: domain.PlatformSleeper,
 		Sport: domain.SportNFL, Season: season, Name: l.Name, Teams: teams,
-		Scoring: scoring, UnsupportedRules: []string{}, RosterSlots: l.RosterPositions,
+		Scoring: scoring, ScoringByPosition: map[string]domain.ScoringRules{},
+		DerivedStats: []domain.DerivedStat{}, UnsupportedRules: []string{}, RosterSlots: l.RosterPositions,
 	}, nil
 }
 

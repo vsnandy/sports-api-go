@@ -132,8 +132,8 @@ func (s *Service) Matchups(ctx context.Context, leagueID string, season, week in
 			return nil, domain.Meta{}, err
 		}
 		if lines != nil {
-			attachStats(home, lines, league.Scoring)
-			attachStats(away, lines, league.Scoring)
+			attachStats(home, lines, league.ScoringModel())
+			attachStats(away, lines, league.ScoringModel())
 		}
 		out = append(out, domain.Matchup{
 			Week: m.Week,
@@ -189,7 +189,7 @@ func (s *Service) resolveEntries(ctx context.Context, refs []domain.RosterEntryR
 }
 
 // attachStats fills Stats and Points in place for players with a stat line.
-func attachStats(r domain.Roster, lines map[string]domain.StatLine, rules domain.ScoringRules) {
+func attachStats(r domain.Roster, lines map[string]domain.StatLine, s domain.Scoring) {
 	for _, entries := range [][]domain.RosterEntry{r.Starters, r.Bench, r.Reserve} {
 		for i := range entries {
 			e := &entries[i]
@@ -200,7 +200,7 @@ func attachStats(r domain.Roster, lines map[string]domain.StatLine, rules domain
 			if !ok {
 				continue
 			}
-			pts := scoring.Points(line.Stats, rules)
+			pts := scoring.Points(line.Stats, s, e.Player.Position)
 			e.Stats, e.Points = line.Stats, &pts
 		}
 	}

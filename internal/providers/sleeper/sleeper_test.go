@@ -94,6 +94,12 @@ func TestLeague(t *testing.T) {
 	if l.UnsupportedRules == nil || len(l.UnsupportedRules) != 0 {
 		t.Fatalf("UnsupportedRules = %#v, want empty non-nil", l.UnsupportedRules)
 	}
+	if l.ScoringByPosition == nil || len(l.ScoringByPosition) != 0 {
+		t.Errorf("ScoringByPosition = %#v, want empty non-nil", l.ScoringByPosition)
+	}
+	if l.DerivedStats == nil || len(l.DerivedStats) != 0 {
+		t.Errorf("DerivedStats = %#v, want empty non-nil", l.DerivedStats)
+	}
 }
 
 func TestLeagueNotFound(t *testing.T) {

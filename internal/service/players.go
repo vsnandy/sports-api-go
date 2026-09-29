@@ -33,14 +33,15 @@ func (s *Service) Gamelog(ctx context.Context, playerID string, season int, scor
 	if !validScoringSyntax(scoringParam) {
 		return nil, domain.Meta{}, &domain.InvalidParamError{Param: "scoring", Reason: "must be ppr, half, std, or a league id like espn:123456"}
 	}
-	if _, err := s.player(ctx, playerID); err != nil {
+	p, err := s.player(ctx, playerID)
+	if err != nil {
 		return nil, domain.Meta{}, err
 	}
 	season, st, err := s.seasonOrCurrent(ctx, season)
 	if err != nil {
 		return nil, domain.Meta{}, err
 	}
-	rules, warnings, err := s.rulesFor(ctx, scoringParam, season)
+	sc, warnings, err := s.rulesFor(ctx, scoringParam, season)
 	if err != nil {
 		return nil, domain.Meta{}, err
 	}
@@ -58,8 +59,8 @@ func (s *Service) Gamelog(ctx context.Context, playerID string, season int, scor
 	out := make([]domain.GamelogEntry, 0, len(lines))
 	for _, l := range lines {
 		e := domain.GamelogEntry{Season: l.Season, Week: l.Week, Opponent: l.Opponent, Stats: l.Stats}
-		if rules != nil {
-			pts := scoring.Points(l.Stats, rules)
+		if sc != nil {
+			pts := scoring.Points(l.Stats, *sc, p.Position)
 			e.Points = &pts
 		}
 		out = append(out, e)
@@ -81,12 +82,12 @@ func validScoringSyntax(param string) bool {
 	return err == nil
 }
 
-func (s *Service) rulesFor(ctx context.Context, param string, season int) (domain.ScoringRules, []string, error) {
+func (s *Service) rulesFor(ctx context.Context, param string, season int) (*domain.Scoring, []string, error) {
 	if param == "" {
 		return nil, nil, nil
 	}
-	if r, ok := scoring.Preset(param); ok {
-		return r, nil, nil
+	if sc, ok := scoring.Preset(param); ok {
+		return &sc, nil, nil
 	}
 	_, _, league, err := s.resolveLeague(ctx, param, season)
 	if err != nil {
@@ -96,5 +97,6 @@ func (s *Service) rulesFor(ctx context.Context, param string, season int) (domai
 	for _, u := range league.UnsupportedRules {
 		warnings = append(warnings, "unsupported_rule: "+u)
 	}
-	return league.Scoring, warnings, nil
+	sc := league.ScoringModel()
+	return &sc, warnings, nil
 }

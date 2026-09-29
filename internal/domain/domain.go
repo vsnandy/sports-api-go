@@ -28,15 +28,17 @@ type LeagueSummary struct {
 }
 
 type League struct {
-	ID               string       `json:"id"`
-	Platform         Platform     `json:"platform"`
-	Sport            Sport        `json:"sport"`
-	Season           int          `json:"season"`
-	Name             string       `json:"name"`
-	Teams            []Team       `json:"teams"`
-	Scoring          ScoringRules `json:"scoring"`
-	UnsupportedRules []string     `json:"unsupportedRules"`
-	RosterSlots      []string     `json:"rosterSlots"`
+	ID                string                  `json:"id"`
+	Platform          Platform                `json:"platform"`
+	Sport             Sport                   `json:"sport"`
+	Season            int                     `json:"season"`
+	Name              string                  `json:"name"`
+	Teams             []Team                  `json:"teams"`
+	Scoring           ScoringRules            `json:"scoring"`
+	ScoringByPosition map[string]ScoringRules `json:"scoringByPosition"`
+	DerivedStats      []DerivedStat           `json:"derivedStats"`
+	UnsupportedRules  []string                `json:"unsupportedRules"`
+	RosterSlots       []string                `json:"rosterSlots"`
 }
 
 type Team struct {
@@ -47,6 +49,27 @@ type Team struct {
 
 // ScoringRules maps a Sleeper stat key to points per unit of that stat.
 type ScoringRules map[string]float64
+
+// Scoring is a league's full scoring model: base rules, per-position replacements
+// (e.g. ESPN's D/ST values), and indicator stats derived from raw stats (tiers).
+type Scoring struct {
+	Rules      ScoringRules
+	ByPosition map[string]ScoringRules
+	Derived    []DerivedStat
+}
+
+// DerivedStat sets Key to 1 when the raw stat From lies in [Min, Max]; nil Max is unbounded.
+type DerivedStat struct {
+	Key  string   `json:"key"`
+	From string   `json:"from"`
+	Min  float64  `json:"min"`
+	Max  *float64 `json:"max"`
+}
+
+// ScoringModel assembles the league's scoring for the engine.
+func (l League) ScoringModel() Scoring {
+	return Scoring{Rules: l.Scoring, ByPosition: l.ScoringByPosition, Derived: l.DerivedStats}
+}
 
 type Player struct {
 	ID          *string           `json:"id"` // Sleeper ID; nil when an ESPN player could not be mapped
