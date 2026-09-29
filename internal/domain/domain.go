@@ -58,7 +58,8 @@ type Scoring struct {
 	Derived    []DerivedStat
 }
 
-// DerivedStat sets Key to 1 when the raw stat From lies in [Min, Max]; nil Max is unbounded.
+// DerivedStat sets Key to 1 when From lies in [Min, Max] (nil Max unbounded), or,
+// when Step > 0, to the number of whole Steps in From.
 type DerivedStat struct {
 	Key  string   `json:"key"`
 	From string   `json:"from"`

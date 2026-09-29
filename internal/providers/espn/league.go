@@ -341,7 +341,9 @@ type PlayerWeekPoints struct {
 }
 
 // WeekPlayerPoints returns ESPN's points for every rostered player (starters, bench,
-// IR) that has an actual-stats row for week. It backs cmd/scoreaudit.
+// IR) that has an actual-stats row for week. It backs cmd/scoreaudit. Like Matchups,
+// it assumes the matchup period equals the scoring period (true for regular-season
+// weeks).
 func (c *Client) WeekPlayerPoints(ctx context.Context, nativeID string, season, week int) ([]PlayerWeekPoints, error) {
 	l, err := c.fetch(ctx, nativeID, season, week, "mMatchupScore", "mBoxscore")
 	if err != nil {
