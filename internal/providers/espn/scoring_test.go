@@ -30,7 +30,7 @@ func TestConvertScoringRealLeague(t *testing.T) {
 
 	for k, want := range map[string]float64{
 		"pass_yd": 0.04, "pass_td": 4, "pass_int": -2, "rec": 0.5, "rush_td": 6,
-		"fgm_0_19": 3, "fgm_40_49": 4, "xpm": 1, "sack": 0, "espn_pa_0": 0,
+		"fgm_0_19": 3, "fgm_40_49": 4, "xpm": 1, "sack": 0, "espn_pa_0": 0, "st_td": 6,
 	} {
 		if got, ok := c.rules[k]; !ok || got != want {
 			t.Errorf("rules[%s] = %v (present %v), want %v", k, got, ok, want)
@@ -42,7 +42,7 @@ func TestConvertScoringRealLeague(t *testing.T) {
 		"int": 2, "fum_rec": 2, "blk_kick": 2, "safe": 2, "sack": 1,
 		"espn_ya_0_99": 5, "espn_ya_100_199": 3, "espn_ya_200_299": 2, "espn_ya_350_399": -1,
 		"espn_ya_400_449": -3, "espn_ya_450_499": -5, "espn_ya_500_549": -6, "espn_ya_550p": -7,
-		"def_st_fum_rec": 2, "def_st_td": 6, "def_td": 6,
+		"def_st_fum_rec": 2, "def_st_td": 6, "def_td": 6, "st_td": 6,
 	}
 	if !reflect.DeepEqual(c.byPosition, map[string]domain.ScoringRules{"DEF": wantDEF}) {
 		t.Errorf("byPosition = %v", c.byPosition)
@@ -74,6 +74,20 @@ func TestConvertedScoringMatchesESPNForDST(t *testing.T) {
 	pit := map[string]float64{"sack": 3, "int": 1, "fum_rec": 1, "pts_allow": 14, "yds_allow": 327, "int_ret_yd": 3}
 	if got := scoring.Points(pit, s, "DEF"); got != 8 {
 		t.Fatalf("PIT D/ST = %v, want 8", got)
+	}
+}
+
+// ESPN stat IDs 101/102 (kick/punt return TD) apply to individual returners (Sleeper
+// st_td), not just team D/ST (def_st_td). A WR line with a return TD and a DEF line
+// with a return TD must each score correctly, without double-counting either way.
+func TestConvertedScoringIndividualReturnTD(t *testing.T) {
+	c := convertScoring(loadItems(t))
+	s := domain.Scoring{Rules: c.rules, ByPosition: c.byPosition, Derived: c.derived}
+	if got := scoring.Points(map[string]float64{"st_td": 1}, s, "WR"); got != 6 {
+		t.Errorf("WR st_td = %v, want 6", got)
+	}
+	if got := scoring.Points(map[string]float64{"def_st_td": 1}, s, "DEF"); got != 6 {
+		t.Errorf("DEF def_st_td = %v, want 6", got)
 	}
 }
 
@@ -130,7 +144,7 @@ func TestESPNStatIDForKey(t *testing.T) {
 	for key, want := range map[string]int{
 		"pass_yd": 3, "fgm_20_29": 80, "sack": 99, "pts_allow": 120, "yds_allow": 127,
 		"fgm_50_59": 198, "fgm_60p": 201, "fgmiss_40_49": 79, "def_st_fum_rec": 96,
-		"def_st_td": 101, "def_td": 103, "espn_pass_yd_per_25": 8,
+		"def_st_td": 101, "st_td": 101, "def_td": 103, "espn_pass_yd_per_25": 8,
 	} {
 		if id, ok := ESPNStatIDForKey(key); !ok || id != want {
 			t.Errorf("ESPNStatIDForKey(%s) = %d, %v; want %d", key, id, ok, want)
@@ -146,7 +160,11 @@ func TestConvertScoringSharedKeyConflict(t *testing.T) {
 		{StatID: 101, Points: 6},
 		{StatID: 102, Points: 4},
 	})
-	if !reflect.DeepEqual(c.unsupported, []string{"espn stats 101 and 102 both map to def_st_td with different points"}) {
+	wantUnsupported := []string{
+		"espn stats 101 and 102 both map to def_st_td with different points",
+		"espn stats 101 and 102 both map to st_td with different points",
+	}
+	if !reflect.DeepEqual(c.unsupported, wantUnsupported) {
 		t.Errorf("unsupported = %v", c.unsupported)
 	}
 	if c.rules["def_st_td"] != 6 {

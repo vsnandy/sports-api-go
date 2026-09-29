@@ -49,7 +49,9 @@ var statKeys = map[int][]string{
 	74: {"fgm_50p"}, 77: {"fgm_40_49"}, 79: {"fgmiss_40_49"}, 80: {"fgm_0_19", "fgm_20_29", "fgm_30_39"},
 	85: {"fgmiss"}, 86: {"xpm"}, 88: {"xpmiss"},
 	95: {"int"}, 96: {"fum_rec", "def_st_fum_rec"}, 97: {"blk_kick"}, 98: {"safe"}, 99: {"sack"},
-	101: {"def_st_td"}, 102: {"def_st_td"},
+	// 101/102 (kick/punt return TD) apply to every player: individual returners carry
+	// Sleeper's st_td, team D/ST lines carry def_st_td (never both on the same line).
+	101: {"def_st_td", "st_td"}, 102: {"def_st_td", "st_td"},
 	103: {"def_td"}, 104: {"def_td"},
 	120: {"pts_allow"}, 127: {"yds_allow"},
 	198: {"fgm_50_59"},
