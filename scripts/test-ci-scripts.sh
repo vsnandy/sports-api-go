@@ -27,4 +27,8 @@ size=$(wc -c < "$tmp/big.md" | tr -d ' ')
 
 ./plan-summary.sh "$tmp/missing.txt" "$tmp/missing.md" || fail "a missing plan file should not fail the step"
 
+# .env.example must be loadable by `make viewer` (set -a && . ./.env) even when copied unedited.
+( set -a; . ../.env.example ) >/dev/null 2>&1 || fail ".env.example must source cleanly (no <placeholders>)"
+( set -a; . ../.env.example; [ -n "$API_URL" ] && [ -n "$API_KEY" ] ) || fail ".env.example must define API_URL and API_KEY"
+
 echo "ci script tests passed"

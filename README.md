@@ -43,7 +43,7 @@ League IDs look like `espn:123456` or `sleeper:987654321`.
 A local, read-only page for your leagues: matchups by week, each player's points and how they were earned, and each league's scoring rules.
 
 ```bash
-cp .env.example .env   # fill in API_URL and API_KEY (commands in the file)
+make viewer-env        # writes .env from Terraform output + SSM (or copy .env.example and edit it)
 make viewer            # then open http://127.0.0.1:8081
 ```
 
