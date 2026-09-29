@@ -140,13 +140,14 @@ type DerivedStat struct {
 go run ./cmd/scoreaudit -season 2026 -weeks 1-3 \
   -league espn:1214655831 -league espn:755035945 -league espn:1422028 -league espn:1215124
 ```
-- `-league` repeatable; omitted → all ESPN leagues for the season from
-  `ListLeagues`. `-weeks` accepts `N` or `N-M`. `-threshold` default `0.98`.
+- `-league` repeatable; omitted → `ESPN_LEAGUE_IDS` (comma-separated). `-v` prints
+  each top mismatch's Sleeper stat line. `-weeks` accepts `N` or `N-M`. `-threshold`
+  default `0.98`.
 - Cookies from `ESPN_S2`/`ESPN_SWID`, else SSM `/sports-api/espn-s2` and
   `/sports-api/espn-swid` (region `AWS_REGION`, default `us-east-1`). Players index uses
   `players.NoStore{}` (fetches Sleeper's dump directly).
 - Prints the summary and top 10 mismatching stat IDs; exit 1 below threshold.
-- `make scoreaudit` runs it with `-season 2026 -weeks 1-3`.
+- `make scoreaudit ARGS='-league espn:<id> …'` runs it with `-season 2026 -weeks 1-3`.
 
 ## 6. Order of Work
 

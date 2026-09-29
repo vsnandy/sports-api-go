@@ -1,4 +1,4 @@
-.PHONY: test run build deploy smoke tf-init
+.PHONY: test run build deploy smoke tf-init scoreaudit
 
 test:
 	go test ./...
@@ -22,3 +22,6 @@ deploy: build
 
 smoke:
 	./scripts/smoke.sh
+
+scoreaudit:
+	go run ./cmd/scoreaudit -season 2026 -weeks 1-3 $(ARGS)
