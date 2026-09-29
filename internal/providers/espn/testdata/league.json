@@ -26,7 +26,7 @@
     {"matchupPeriodId": 2, "home": {"teamId": 1, "totalPoints": 90}, "away": {"teamId": 2, "totalPoints": 80}},
     {"matchupPeriodId": 3,
       "home": {"teamId": 2, "totalPoints": 101.2, "rosterForCurrentScoringPeriod": {"entries": []}},
-      "away": {"teamId": 1, "totalPoints": 120.5, "rosterForCurrentScoringPeriod": {"entries": [
+      "away": {"teamId": 1, "totalPoints": 0, "totalPointsLive": 120.5, "rosterForCurrentScoringPeriod": {"entries": [
         {"playerId": 3139477, "lineupSlotId": 0, "playerPoolEntry": {"player": {"fullName": "Patrick Mahomes", "defaultPositionId": 1, "proTeamId": 12,
           "stats": [
             {"scoringPeriodId": 3, "statSourceId": 1, "statSplitTypeId": 1, "appliedTotal": 99.9, "appliedStats": {"3": 99.9}},

@@ -106,6 +106,7 @@ type scheduleJSON struct {
 type sideJSON struct {
 	TeamID                        int         `json:"teamId"`
 	TotalPoints                   float64     `json:"totalPoints"`
+	TotalPointsLive               *float64    `json:"totalPointsLive"` // set while a matchup period isn't final; totalPoints is 0 then
 	RosterForCurrentScoringPeriod *rosterJSON `json:"rosterForCurrentScoringPeriod"`
 }
 
@@ -175,7 +176,11 @@ func side(s sideJSON, week int) domain.MatchupSideRef {
 		entries = s.RosterForCurrentScoringPeriod.Entries
 	}
 	id := strconv.Itoa(s.TeamID)
-	return domain.MatchupSideRef{TeamID: id, Points: s.TotalPoints, Roster: toRoster(id, entries, week)}
+	points := s.TotalPoints
+	if s.TotalPointsLive != nil {
+		points = *s.TotalPointsLive
+	}
+	return domain.MatchupSideRef{TeamID: id, Points: points, Roster: toRoster(id, entries, week)}
 }
 
 func toRoster(teamID string, entries []entryJSON, week int) domain.RosterRef {
