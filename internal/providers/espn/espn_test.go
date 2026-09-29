@@ -200,3 +200,50 @@ func TestSecretsNotInErrors(t *testing.T) {
 		t.Fatalf("err = %v; must exist and must not include the cookie", err)
 	}
 }
+
+func TestMatchupsPlatformPoints(t *testing.T) {
+	c, _ := newTestClient(t, "S2")
+	ms, err := c.Matchups(context.Background(), "123456", 2026, 3, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	away := ms[0].Away.Roster
+	qb := away.Starters[0]
+	if qb.PlatformPoints == nil || *qb.PlatformPoints != 24.5 {
+		t.Fatalf("QB PlatformPoints = %v, want 24.5 from the actual week-3 row (not projection 99.9, week 2, or season)", qb.PlatformPoints)
+	}
+	if len(away.Bench) != 1 || away.Bench[0].PlatformPoints != nil {
+		t.Fatalf("bench entry with only a projection row must have nil PlatformPoints: %+v", away.Bench)
+	}
+}
+
+func TestRostersHaveNoPlatformPoints(t *testing.T) {
+	c, _ := newTestClient(t, "S2")
+	rs, err := c.Rosters(context.Background(), "123456", 2026, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range rs[0].Starters {
+		if e.PlatformPoints != nil {
+			t.Fatalf("rosters have no week; PlatformPoints = %v", *e.PlatformPoints)
+		}
+	}
+}
+
+func TestWeekPlayerPoints(t *testing.T) {
+	c, _ := newTestClient(t, "S2")
+	pts, err := c.WeekPlayerPoints(context.Background(), "123456", 2026, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pts) != 1 {
+		t.Fatalf("got %d players, want 1 (only entries with an actual week-3 row)", len(pts))
+	}
+	p := pts[0]
+	if p.Ref.ID != "3139477" || p.Ref.Name != "Patrick Mahomes" || p.Ref.Position != "QB" || p.Total != 24.5 {
+		t.Fatalf("player = %+v", p)
+	}
+	if !reflect.DeepEqual(p.ByStat, map[int]float64{3: 10, 4: 12, 20: -2, 24: 4.5}) {
+		t.Fatalf("ByStat = %v", p.ByStat)
+	}
+}

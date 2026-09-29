@@ -62,11 +62,38 @@ type entryJSON struct {
 	LineupSlotID    int `json:"lineupSlotId"`
 	PlayerPoolEntry struct {
 		Player struct {
-			FullName          string `json:"fullName"`
-			DefaultPositionID int    `json:"defaultPositionId"`
-			ProTeamID         int    `json:"proTeamId"`
+			FullName          string        `json:"fullName"`
+			DefaultPositionID int           `json:"defaultPositionId"`
+			ProTeamID         int           `json:"proTeamId"`
+			Stats             []statRowJSON `json:"stats"`
 		} `json:"player"`
 	} `json:"playerPoolEntry"`
+}
+
+type statRowJSON struct {
+	ScoringPeriodID int                `json:"scoringPeriodId"`
+	StatSourceID    int                `json:"statSourceId"`    // 0 actual, 1 projected
+	StatSplitTypeID int                `json:"statSplitTypeId"` // 1 single scoring period
+	AppliedTotal    float64            `json:"appliedTotal"`
+	AppliedStats    map[string]float64 `json:"appliedStats"`
+}
+
+// actualRow returns the entry's actual (not projected) stats row for one week.
+func (e entryJSON) actualRow(week int) (statRowJSON, bool) {
+	for _, r := range e.PlayerPoolEntry.Player.Stats {
+		if r.StatSourceID == 0 && r.StatSplitTypeID == 1 && r.ScoringPeriodID == week {
+			return r, true
+		}
+	}
+	return statRowJSON{}, false
+}
+
+func (e entryJSON) ref() domain.PlayerRef {
+	p := e.PlayerPoolEntry.Player
+	return domain.PlayerRef{
+		Platform: domain.PlatformESPN, ID: strconv.Itoa(e.PlayerID), Name: p.FullName,
+		Position: positions[p.DefaultPositionID], NFLTeam: proTeams[p.ProTeamID],
+	}
 }
 
 type scheduleJSON struct {
@@ -119,7 +146,7 @@ func (c *Client) Rosters(ctx context.Context, nativeID string, season int, _ []s
 		if t.Roster != nil {
 			entries = t.Roster.Entries
 		}
-		out = append(out, toRoster(strconv.Itoa(t.ID), entries))
+		out = append(out, toRoster(strconv.Itoa(t.ID), entries, 0))
 	}
 	return out, nil
 }
@@ -136,30 +163,32 @@ func (c *Client) Matchups(ctx context.Context, nativeID string, season, week int
 		if m.MatchupPeriodID != week || m.Home == nil || m.Away == nil {
 			continue
 		}
-		out = append(out, domain.MatchupRef{Week: week, Home: side(*m.Home), Away: side(*m.Away)})
+		out = append(out, domain.MatchupRef{Week: week, Home: side(*m.Home, week), Away: side(*m.Away, week)})
 	}
 	return out, nil
 }
 
-func side(s sideJSON) domain.MatchupSideRef {
+func side(s sideJSON, week int) domain.MatchupSideRef {
 	var entries []entryJSON
 	if s.RosterForCurrentScoringPeriod != nil {
 		entries = s.RosterForCurrentScoringPeriod.Entries
 	}
 	id := strconv.Itoa(s.TeamID)
-	return domain.MatchupSideRef{TeamID: id, Points: s.TotalPoints, Roster: toRoster(id, entries)}
+	return domain.MatchupSideRef{TeamID: id, Points: s.TotalPoints, Roster: toRoster(id, entries, week)}
 }
 
-func toRoster(teamID string, entries []entryJSON) domain.RosterRef {
+func toRoster(teamID string, entries []entryJSON, week int) domain.RosterRef {
 	sorted := slices.Clone(entries)
 	slices.SortStableFunc(sorted, func(a, b entryJSON) int { return cmp.Compare(slotRank(a.LineupSlotID), slotRank(b.LineupSlotID)) })
 	r := domain.RosterRef{TeamID: teamID, Starters: []domain.RosterEntryRef{}, Bench: []domain.RosterEntryRef{}, Reserve: []domain.RosterEntryRef{}}
 	for _, e := range sorted {
-		p := e.PlayerPoolEntry.Player
-		ref := domain.RosterEntryRef{Slot: slotName(e.LineupSlotID), Ref: domain.PlayerRef{
-			Platform: domain.PlatformESPN, ID: strconv.Itoa(e.PlayerID), Name: p.FullName,
-			Position: positions[p.DefaultPositionID], NFLTeam: proTeams[p.ProTeamID],
-		}}
+		ref := domain.RosterEntryRef{Slot: slotName(e.LineupSlotID), Ref: e.ref()}
+		if week > 0 {
+			if row, ok := e.actualRow(week); ok {
+				total := row.AppliedTotal
+				ref.PlatformPoints = &total
+			}
+		}
 		switch ref.Slot {
 		case "BN":
 			r.Bench = append(r.Bench, ref)
@@ -241,4 +270,45 @@ func convertScoring(items []scoringItemJSON) convertedScoring {
 	sort.Strings(c.unsupported)
 	slices.SortFunc(c.derived, func(a, b domain.DerivedStat) int { return cmp.Compare(a.Key, b.Key) })
 	return c
+}
+
+// PlayerWeekPoints is ESPN's own scoring of one rostered player for one week.
+type PlayerWeekPoints struct {
+	Ref    domain.PlayerRef
+	Total  float64
+	ByStat map[int]float64 // ESPN stat ID → points
+}
+
+// WeekPlayerPoints returns ESPN's points for every rostered player (starters, bench,
+// IR) that has an actual-stats row for week. It backs cmd/scoreaudit.
+func (c *Client) WeekPlayerPoints(ctx context.Context, nativeID string, season, week int) ([]PlayerWeekPoints, error) {
+	l, err := c.fetch(ctx, nativeID, season, week, "mMatchupScore", "mBoxscore")
+	if err != nil {
+		return nil, err
+	}
+	out := []PlayerWeekPoints{}
+	for _, m := range l.Schedule {
+		if m.MatchupPeriodID != week {
+			continue
+		}
+		for _, s := range []*sideJSON{m.Home, m.Away} {
+			if s == nil || s.RosterForCurrentScoringPeriod == nil {
+				continue
+			}
+			for _, e := range s.RosterForCurrentScoringPeriod.Entries {
+				row, ok := e.actualRow(week)
+				if !ok {
+					continue
+				}
+				by := make(map[int]float64, len(row.AppliedStats))
+				for k, v := range row.AppliedStats {
+					if id, err := strconv.Atoi(k); err == nil {
+						by[id] = v
+					}
+				}
+				out = append(out, PlayerWeekPoints{Ref: e.ref(), Total: row.AppliedTotal, ByStat: by})
+			}
+		}
+	}
+	return out, nil
 }

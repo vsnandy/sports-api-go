@@ -79,13 +79,14 @@ type Player struct {
 	PlatformIDs map[string]string `json:"platformIds"`
 }
 
-// RosterEntry is a rostered player. Stats and Points are nil unless stats were
+// RosterEntry is a rostered player. Stats, Points and PointsSource are unset unless stats were
 // requested and available for that player.
 type RosterEntry struct {
-	Slot   string             `json:"slot"`
-	Player Player             `json:"player"`
-	Stats  map[string]float64 `json:"stats"`
-	Points *float64           `json:"points"`
+	Slot         string             `json:"slot"`
+	Player       Player             `json:"player"`
+	Stats        map[string]float64 `json:"stats"`
+	Points       *float64           `json:"points"`
+	PointsSource string             `json:"pointsSource,omitempty"` // "platform" or "computed" when Points is set
 }
 
 type Roster struct {
@@ -142,6 +143,8 @@ type PlayerRef struct {
 type RosterEntryRef struct {
 	Slot string
 	Ref  PlayerRef
+	// PlatformPoints is the platform's own points for the requested week, when it reports them.
+	PlatformPoints *float64
 }
 
 type RosterRef struct {

@@ -131,9 +131,10 @@ func (s *Service) Matchups(ctx context.Context, leagueID string, season, week in
 		if err != nil {
 			return nil, domain.Meta{}, err
 		}
-		if lines != nil {
-			attachStats(home, lines, league.ScoringModel())
-			attachStats(away, lines, league.ScoringModel())
+		if withStats {
+			sc := league.ScoringModel()
+			attachPoints(home, m.Home.Roster, lines, sc)
+			attachPoints(away, m.Away.Roster, lines, sc)
 		}
 		out = append(out, domain.Matchup{
 			Week: m.Week,
@@ -188,20 +189,33 @@ func (s *Service) resolveEntries(ctx context.Context, refs []domain.RosterEntryR
 	return out, nil
 }
 
-// attachStats fills Stats and Points in place for players with a stat line.
-func attachStats(r domain.Roster, lines map[string]domain.StatLine, s domain.Scoring) {
-	for _, entries := range [][]domain.RosterEntry{r.Starters, r.Bench, r.Reserve} {
-		for i := range entries {
-			e := &entries[i]
-			if e.Player.ID == nil {
-				continue
+// attachPoints fills Stats, Points and PointsSource in place. The platform's own
+// points win; otherwise points are computed from the Sleeper stat line with the
+// league's scoring. Roster entries and refs are index-aligned (resolveEntries keeps order).
+func attachPoints(r domain.Roster, ref domain.RosterRef, lines map[string]domain.StatLine, s domain.Scoring) {
+	groups := []struct {
+		entries []domain.RosterEntry
+		refs    []domain.RosterEntryRef
+	}{{r.Starters, ref.Starters}, {r.Bench, ref.Bench}, {r.Reserve, ref.Reserve}}
+	for _, g := range groups {
+		for i := range g.entries {
+			e := &g.entries[i]
+			var line domain.StatLine
+			hasLine := false
+			if e.Player.ID != nil {
+				line, hasLine = lines[*e.Player.ID]
 			}
-			line, ok := lines[*e.Player.ID]
-			if !ok {
-				continue
+			if hasLine {
+				e.Stats = line.Stats
 			}
-			pts := scoring.Points(line.Stats, s, e.Player.Position)
-			e.Stats, e.Points = line.Stats, &pts
+			switch {
+			case i < len(g.refs) && g.refs[i].PlatformPoints != nil:
+				pts := *g.refs[i].PlatformPoints
+				e.Points, e.PointsSource = &pts, "platform"
+			case hasLine:
+				pts := scoring.Points(line.Stats, s, e.Player.Position)
+				e.Points, e.PointsSource = &pts, "computed"
+			}
 		}
 	}
 }

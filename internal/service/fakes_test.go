@@ -136,6 +136,13 @@ func espnRef(slot, id, name, pos, team string) domain.RosterEntryRef {
 	return domain.RosterEntryRef{Slot: slot, Ref: domain.PlayerRef{Platform: domain.PlatformESPN, ID: id, Name: name, Position: pos, NFLTeam: team}}
 }
 
+func ptr(v float64) *float64 { return &v }
+
+func withPlatformPoints(r domain.RosterEntryRef, pts float64) domain.RosterEntryRef {
+	r.PlatformPoints = ptr(pts)
+	return r
+}
+
 type fixture struct {
 	svc     *Service
 	sleeper *fakeProvider
