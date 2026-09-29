@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -43,7 +44,24 @@ func NewHandler(c *Client) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.leagues)
 	mux.HandleFunc("GET /league/{id}", s.league)
-	return mux
+	return loopbackOnly(mux)
+}
+
+// loopbackOnly rejects requests whose Host isn't a loopback name, so a web page using
+// DNS rebinding can't read league data through the running viewer.
+func loopbackOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.Host)
+		if err != nil {
+			host = r.Host
+		}
+		switch host {
+		case "127.0.0.1", "localhost", "::1":
+			next.ServeHTTP(w, r)
+		default:
+			http.Error(w, "forbidden host", http.StatusForbidden)
+		}
+	})
 }
 
 type leagueLink struct{ Name, Href string }

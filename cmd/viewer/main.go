@@ -34,7 +34,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "viewer:", err)
 		os.Exit(2)
 	}
-	c := &viewer.Client{BaseURL: cfg.apiURL, APIKey: cfg.apiKey, HTTP: &http.Client{Timeout: 20 * time.Second}}
+	c := viewer.NewClient(cfg.apiURL, cfg.apiKey, 20*time.Second)
 	fmt.Printf("league viewer on http://%s\n", addr)
 	if err := http.ListenAndServe(addr, viewer.NewHandler(c)); err != nil {
 		fmt.Fprintln(os.Stderr, "viewer:", err)

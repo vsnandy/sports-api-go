@@ -87,7 +87,7 @@ func newFakeAPI(t *testing.T) (*fakeAPI, *httptest.Server) {
 func get(t *testing.T, h http.Handler, path string) (int, string) {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8081"+path, nil))
 	return rec.Code, rec.Body.String()
 }
 
@@ -255,5 +255,59 @@ func TestBreakdownRowsSortedWithTotal(t *testing.T) {
 	want := []string{"Interceptions thrown=-3", "Passing TDs=2", "Sacks=1"}
 	if strings.Join(got, ",") != strings.Join(want, ",") || total != 0 {
 		t.Fatalf("rows = %v total %v, want %v total 0", got, total, want)
+	}
+}
+
+func TestAPIKeyNotForwardedOnRedirect(t *testing.T) {
+	var leaked sync.Mutex
+	var sawKey bool
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		leaked.Lock()
+		defer leaked.Unlock()
+		if r.Header.Get("X-API-Key") != "" {
+			sawKey = true
+		}
+		io.WriteString(w, `{"data":[],"meta":{"season":2026,"warnings":[]}}`)
+	}))
+	defer other.Close()
+	redirecting := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, other.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer redirecting.Close()
+
+	h := NewHandler(NewClient(redirecting.URL, "sekret-key-123", 5*time.Second))
+	code, body := get(t, h, "/")
+	leaked.Lock()
+	defer leaked.Unlock()
+	if sawKey {
+		t.Fatal("X-API-Key was forwarded to the redirect target")
+	}
+	if code != http.StatusBadGateway || strings.Contains(body, "sekret-key-123") {
+		t.Fatalf("status %d; a redirect should render as an API error without the key", code)
+	}
+}
+
+func TestRejectsNonLoopbackHost(t *testing.T) {
+	f, h := newTestHandler(t)
+	for _, host := range []string{"evil.example", "evil.example:8081", "192.168.1.5:8081"} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = host
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusForbidden {
+			t.Errorf("Host %q: status %d, want 403", host, rec.Code)
+		}
+	}
+	for _, host := range []string{"localhost:8081", "127.0.0.1:8081", "[::1]:8081"} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = host
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Errorf("Host %q: status %d, want 200", host, rec.Code)
+		}
+	}
+	if n := len(f.urls()); n != 3 {
+		t.Errorf("API calls = %d, want 3 (only the loopback requests)", n)
 	}
 }

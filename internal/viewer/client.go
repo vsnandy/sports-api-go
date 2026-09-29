@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type Client struct {
@@ -72,4 +73,13 @@ func (c *Client) Get(ctx context.Context, path string, q url.Values, out any) (M
 		return Meta{}, fmt.Errorf("decoding %s data: %w", path, err)
 	}
 	return env.Meta, nil
+}
+
+// NewClient returns a Client for the API at baseURL. It never follows redirects:
+// Go would copy the X-API-Key header to the redirect target, which may be another host.
+func NewClient(baseURL, apiKey string, timeout time.Duration) *Client {
+	return &Client{BaseURL: baseURL, APIKey: apiKey, HTTP: &http.Client{
+		Timeout:       timeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}}
 }
