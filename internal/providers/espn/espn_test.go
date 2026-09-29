@@ -212,6 +212,13 @@ func TestMatchupsPlatformPoints(t *testing.T) {
 	if qb.PlatformPoints == nil || *qb.PlatformPoints != 24.5 {
 		t.Fatalf("QB PlatformPoints = %v, want 24.5 from the actual week-3 row (not projection 99.9, week 2, or season)", qb.PlatformPoints)
 	}
+	wantBreakdown := map[string]float64{"pass_yd": 10, "pass_td": 12, "pass_int": -2, "rush_yd": 4.5}
+	if !reflect.DeepEqual(qb.PlatformBreakdown, wantBreakdown) {
+		t.Fatalf("QB PlatformBreakdown = %v, want %v", qb.PlatformBreakdown, wantBreakdown)
+	}
+	if away.Bench[0].PlatformBreakdown != nil {
+		t.Fatal("no actual row → no breakdown")
+	}
 	if len(away.Bench) != 1 || away.Bench[0].PlatformPoints != nil {
 		t.Fatalf("bench entry with only a projection row must have nil PlatformPoints: %+v", away.Bench)
 	}

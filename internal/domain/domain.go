@@ -91,6 +91,8 @@ type RosterEntry struct {
 	Stats        map[string]float64 `json:"stats"`
 	Points       *float64           `json:"points"`
 	PointsSource string             `json:"pointsSource,omitempty"` // "platform" or "computed" when Points is set
+	// PointsBreakdown is the points per stat key when Points is set.
+	PointsBreakdown map[string]float64 `json:"pointsBreakdown,omitempty"`
 }
 
 type Roster struct {
@@ -149,6 +151,8 @@ type RosterEntryRef struct {
 	Ref  PlayerRef
 	// PlatformPoints is the platform's own points for the requested week, when it reports them.
 	PlatformPoints *float64
+	// PlatformBreakdown is the platform's own points per stat key for that week.
+	PlatformBreakdown map[string]float64
 }
 
 type RosterRef struct {

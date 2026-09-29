@@ -1,0 +1,21 @@
+{{define "head"}}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.}}</title>
+<style>
+body{font:14px/1.45 system-ui,sans-serif;margin:1.5rem auto;max-width:72rem;padding:0 1rem;color:#1d1d1f;background:#fff}
+a{color:#0b57d0} h1{font-size:1.4rem;margin:.2rem 0} h2{font-size:1.1rem} h3{font-size:1rem;margin:.6rem 0 .3rem}
+.muted{color:#666;font-size:12px}
+.warn{background:#fff4e5;border:1px solid #f0c36d;padding:.4rem .7rem;margin:.4rem 0}
+.err{background:#fdecea;border:1px solid #f5a8a0;padding:.6rem .8rem}
+details{border:1px solid #ddd;border-radius:6px;margin:.4rem 0;padding:.3rem .6rem}
+td details{border:none;margin:0;padding:0}
+summary{cursor:pointer}
+.matchup>summary{font-weight:600}
+.sides{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+table{border-collapse:collapse;width:100%} td,th{padding:.2rem .4rem;border-bottom:1px solid #eee;text-align:left;vertical-align:top}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.tag{font-size:11px;padding:0 .3rem;border-radius:3px;background:#e8eefc}
+.tag.computed{background:#e7f5e9}
+nav form{display:inline}
+</style></head><body>{{end}}
+{{define "foot"}}</body></html>{{end}}

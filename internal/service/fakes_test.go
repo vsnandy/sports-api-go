@@ -212,3 +212,8 @@ func newFixture() *fixture {
 	f.svc = New([]LeagueProvider{f.espn, f.sleeper}, f.stats, f.state, f.index, func() time.Time { return f.now })
 	return f
 }
+
+func withPlatformBreakdown(r domain.RosterEntryRef, b map[string]float64) domain.RosterEntryRef {
+	r.PlatformBreakdown = b
+	return r
+}

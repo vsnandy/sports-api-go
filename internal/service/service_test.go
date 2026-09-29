@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -285,7 +286,7 @@ func espnMatchups() []domain.MatchupRef {
 		Home: domain.MatchupSideRef{TeamID: "1", Points: 42.6, Roster: domain.RosterRef{
 			TeamID: "1",
 			Starters: []domain.RosterEntryRef{
-				withPlatformPoints(espnRef("QB", "3139477", "Patrick Mahomes", "QB", "KC"), 24.5),
+				withPlatformBreakdown(withPlatformPoints(espnRef("QB", "3139477", "Patrick Mahomes", "QB", "KC"), 24.5), map[string]float64{"pass_yd": 12.5, "pass_td": 12}),
 				withPlatformPoints(espnRef("RB", "9999999", "Rookie Guy", "RB", ""), 7),
 				espnRef("WR", "4262921", "Justin Jefferson", "WR", "MIN"),
 			},
@@ -312,6 +313,16 @@ func TestMatchupsPlatformPoints(t *testing.T) {
 	if *st[2].Points != 11.5 || st[2].PointsSource != "computed" {
 		t.Errorf("fallback: %+v (want computed 11.5)", st[2])
 	}
+	if !reflect.DeepEqual(st[0].PointsBreakdown, map[string]float64{"pass_yd": 12.5, "pass_td": 12}) {
+		t.Errorf("platform breakdown = %v", st[0].PointsBreakdown)
+	}
+	// Computed: rec 6×0.5 + rec_yd 85×0.1 under the ESPN league's flat rules.
+	if !reflect.DeepEqual(st[2].PointsBreakdown, map[string]float64{"rec": 3, "rec_yd": 8.5}) {
+		t.Errorf("computed breakdown = %v", st[2].PointsBreakdown)
+	}
+	if st[1].PointsBreakdown != nil {
+		t.Errorf("platform points without a breakdown should leave it nil: %v", st[1].PointsBreakdown)
+	}
 }
 
 func TestMatchupsPlatformPointsSurviveStatsFailure(t *testing.T) {
@@ -328,6 +339,9 @@ func TestMatchupsPlatformPointsSurviveStatsFailure(t *testing.T) {
 	}
 	if st[2].Points != nil || st[2].PointsSource != "" {
 		t.Errorf("no platform points and no stats → no points: %+v", st[2])
+	}
+	if st[2].PointsBreakdown != nil {
+		t.Errorf("no points → no breakdown: %v", st[2].PointsBreakdown)
 	}
 	if !slices.ContainsFunc(meta.Warnings, func(w string) bool { return strings.HasPrefix(w, "stats_unavailable:") }) {
 		t.Errorf("warnings = %v, want a stats_unavailable warning", meta.Warnings)

@@ -135,3 +135,18 @@ func ESPNStatIDForKey(key string) (int, bool) {
 	}
 	return best, true
 }
+
+// espnKeyForID returns the stat key an ESPN stat ID's points are reported under:
+// its tier key, step key, or first mapped Sleeper key; unmapped IDs become "espn_<id>".
+func espnKeyForID(id int) string {
+	if t, ok := tiers[id]; ok {
+		return t.key
+	}
+	if s, ok := steps[id]; ok {
+		return s.key
+	}
+	if keys, ok := statKeys[id]; ok && len(keys) > 0 {
+		return keys[0]
+	}
+	return fmt.Sprintf("espn_%d", id)
+}
