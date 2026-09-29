@@ -51,8 +51,8 @@ existing client breaks.
 ### 3.2 Data flow
 
 1. `GET /v1/nfl/leagues` (its warnings pass through).
-2. For every league, in parallel (errgroup, bounded to 7 concurrent — one per league):
-   `GET /v1/nfl/leagues/{id}` and `GET /v1/nfl/leagues/{id}/matchups?week=N`
+2. For every league, in parallel (errgroup, one goroutine per league):
+   `GET /v1/nfl/leagues/{id}` and `GET /v1/nfl/leagues/{id}/matchups?include=stats&week=N`
    (`week` omitted when the request has none, so the API picks the current week).
 3. Week shown = the request's week, else the `meta.week` of the first league (in list
    order) whose matchups loaded. Leagues whose `meta.week` differs from it get a warning
