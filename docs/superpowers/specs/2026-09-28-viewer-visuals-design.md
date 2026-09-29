@@ -66,7 +66,7 @@ untrusted text reaches an `src` attribute.
 league name and a platform badge (`ESPN` / `Sleeper`); warnings as amber callouts.
 
 **League (`/league/{id}`):**
-- Header card: `← All leagues`, league name, "Week N · 2026", and a nav row:
+- Header card: `← All leagues`, league name, "2026 · week N" (existing copy), and a nav row:
   `‹ Week N-1` (hidden at 1), week `<select>` + Go button, `Week N+1 ›` (hidden at 18),
   `⟳ Refresh`.
 - Warnings: amber callouts.
