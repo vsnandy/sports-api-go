@@ -95,9 +95,10 @@ func loopbackOnly(next http.Handler) http.Handler {
 type leagueLink struct{ Name, Href, Platform string }
 
 type leaguesView struct {
-	Season   int
-	Warnings []string
-	Leagues  []leagueLink // ESPN first, then Sleeper
+	Season      int
+	RootingHref string
+	Warnings    []string
+	Leagues     []leagueLink // ESPN first, then Sleeper
 }
 
 type errorView struct{ Title, Code, Message string }
@@ -109,7 +110,7 @@ func (s *server) leagues(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	v := leaguesView{Season: meta.Season, Warnings: meta.Warnings}
+	v := leaguesView{Season: meta.Season, RootingHref: s.links.rooting(0), Warnings: meta.Warnings}
 	var sleeperLinks []leagueLink
 	for _, l := range ls {
 		link := leagueLink{Name: l.Name, Href: s.links.league(l.ID, 0), Platform: string(l.Platform)}
