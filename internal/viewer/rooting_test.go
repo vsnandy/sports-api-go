@@ -245,3 +245,14 @@ func TestLeaguesPageRootingLinkUsesStaticLinker(t *testing.T) {
 	_, body := get(t, h, "/")
 	mustContain(t, body, `href="/sports-api-go/rooting/index.html"`, "Rooting guide")
 }
+
+func TestAllLeaguesLinkUsesStaticLinker(t *testing.T) {
+	_, srv := newFakeAPI(t)
+	h := NewStaticHandler(&Client{BaseURL: srv.URL, APIKey: "k", HTTP: &http.Client{Timeout: 5 * time.Second}}, "/sports-api-go/")
+
+	_, leaguePage := get(t, h, "/league/espn:1")
+	mustContain(t, leaguePage, `href="/sports-api-go/index.html">← All leagues`)
+
+	_, rootingPage := get(t, h, "/rooting")
+	mustContain(t, rootingPage, `href="/sports-api-go/index.html">← All leagues`)
+}

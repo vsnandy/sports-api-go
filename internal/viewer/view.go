@@ -54,16 +54,16 @@ type positionRules struct {
 type derivedView struct{ Label, From, Range string }
 
 type leagueView struct {
-	ID, Name                        string
-	Season, Week, Prev, Next        int
-	PrevHref, NextHref, RefreshHref string
-	Weeks                           []weekOption
-	Warnings                        []string
-	Matchups                        []matchupView
-	Rules                           []ruleView
-	ByPosition                      []positionRules
-	Derived                         []derivedView
-	Unsupported                     []string
+	ID, Name                                     string
+	Season, Week, Prev, Next                     int
+	LeaguesHref, PrevHref, NextHref, RefreshHref string
+	Weeks                                        []weekOption
+	Warnings                                     []string
+	Matchups                                     []matchupView
+	Rules                                        []ruleView
+	ByPosition                                   []positionRules
+	Derived                                      []derivedView
+	Unsupported                                  []string
 }
 
 func buildLeagueView(lg domain.League, ms []domain.Matchup, meta Meta, links linker) leagueView {
@@ -71,7 +71,7 @@ func buildLeagueView(lg domain.League, ms []domain.Matchup, meta Meta, links lin
 	for _, t := range lg.Teams {
 		names[t.ID] = t.Name
 	}
-	v := leagueView{ID: lg.ID, Name: lg.Name, Season: meta.Season, Week: meta.Week, Warnings: meta.Warnings, Unsupported: lg.UnsupportedRules}
+	v := leagueView{ID: lg.ID, Name: lg.Name, Season: meta.Season, Week: meta.Week, LeaguesHref: links.leagues(), Warnings: meta.Warnings, Unsupported: lg.UnsupportedRules}
 	v.Prev, v.Next, v.PrevHref, v.NextHref, v.RefreshHref, v.Weeks = weekLinks(v.Week, func(w int) string { return links.league(lg.ID, w) })
 	for _, m := range ms {
 		home, away := buildSide(m.Home, names), buildSide(m.Away, names)

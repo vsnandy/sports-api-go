@@ -8,18 +8,26 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // RenderSite renders every page of the viewer to static HTML files under outDir, for
 // publishing to GitHub Pages. basePath is passed to NewStaticHandler (see its doc).
-// It fails fast on the first page that doesn't render with a 2xx status, rather than
-// publishing a partial or broken site.
+// It fails fast on the first page that doesn't render with a 2xx status, or if the
+// leagues list itself reports a provider unavailable (e.g. an expired ESPN cookie),
+// rather than publishing a site that's silently missing that provider's leagues.
 func RenderSite(ctx context.Context, c *Client, outDir, basePath string) error {
 	var ls []struct {
 		ID string `json:"id"`
 	}
-	if _, err := c.Get(ctx, "/v1/nfl/leagues", nil, &ls); err != nil {
+	meta, err := c.Get(ctx, "/v1/nfl/leagues", nil, &ls)
+	if err != nil {
 		return fmt.Errorf("listing leagues: %w", err)
+	}
+	for _, w := range meta.Warnings {
+		if strings.Contains(w, "_leagues_unavailable") {
+			return fmt.Errorf("listing leagues: %s", w)
+		}
 	}
 
 	h := NewStaticHandler(c, basePath)

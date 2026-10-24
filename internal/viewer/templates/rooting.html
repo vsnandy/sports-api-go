@@ -1,6 +1,6 @@
 {{template "head" "Rooting guide"}}
 <div class="card">
-<a href="/">← All leagues</a>
+<a href="{{.LeaguesHref}}">← All leagues</a>
 <h1>Rooting guide</h1>
 <div class="muted">{{.Season}} · week {{.Week}} · {{.Counted}} leagues counted{{if .NotPlaying}} · not playing this week: {{range $i, $n := .NotPlaying}}{{if $i}}, {{end}}{{$n}}{{end}}{{end}}</div>
 <div class="nav">

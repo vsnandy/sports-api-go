@@ -105,6 +105,22 @@ func TestRenderSiteNoLeagues(t *testing.T) {
 	}
 }
 
+const oneLeagueDegradedJSON = `{"data":[{"id":"espn:1","platform":"espn","season":2026,"name":"Office League"}],"meta":{"season":2026,"warnings":["espn_leagues_unavailable: espn auth failed"]}}`
+
+func TestRenderSiteFailsWhenLeaguesListDegraded(t *testing.T) {
+	srv := newStaticFakeAPI(t, oneLeagueDegradedJSON, false)
+	c := &Client{BaseURL: srv.URL, APIKey: "k", HTTP: &http.Client{Timeout: 5 * time.Second}}
+	dir := t.TempDir()
+
+	err := RenderSite(context.Background(), c, dir, "/")
+	if err == nil {
+		t.Fatal("RenderSite should fail when the leagues list itself reports a provider unavailable, rather than silently publishing a site missing that provider's leagues")
+	}
+	if !strings.Contains(err.Error(), "espn_leagues_unavailable") {
+		t.Errorf("error should name the warning, got: %v", err)
+	}
+}
+
 func TestRenderSiteFailsOnUpstreamError(t *testing.T) {
 	srv := newStaticFakeAPI(t, oneLeagueJSON, true)
 	c := &Client{BaseURL: srv.URL, APIKey: "k", HTTP: &http.Client{Timeout: 5 * time.Second}}
