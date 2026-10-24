@@ -1,0 +1,57 @@
+name: pages
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  SSM_PREFIX: "/sports-api/"
+  SITE_BASE_PATH: ${{ vars.SITE_BASE_PATH }}
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pages: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check repository variables
+        env:
+          API_URL: ${{ vars.API_URL }}
+        run: ./scripts/check-vars.sh AWS_REGION API_URL
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Render static site
+        env:
+          API_URL: ${{ vars.API_URL }}
+        run: |
+          API_KEY=$(aws ssm get-parameter --name "${SSM_PREFIX}api-key" --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$API_KEY"
+          OUT_DIR=dist/pages API_KEY="$API_KEY" go run ./cmd/viewer-static
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/pages
+      - uses: actions/deploy-pages@v4
+        id: deployment
