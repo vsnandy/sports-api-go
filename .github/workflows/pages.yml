@@ -1,0 +1,70 @@
+name: pages
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  SSM_PREFIX: "/sports-api/"
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  # No `environment:` here: declaring one changes the OIDC token's `sub` claim to
+  # `...:environment:<name>`, which the deploy role's trust policy (an exact match on
+  # `...:ref:refs/heads/main`) would reject, so AWS credential assumption would fail on
+  # every run. Only the deploy job below (which does no AWS calls) carries `environment:`.
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pages: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check repository variables
+        env:
+          API_URL: ${{ vars.API_URL }}
+        run: ./scripts/check-vars.sh AWS_REGION API_URL
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - uses: actions/configure-pages@v5
+        id: pages
+      - name: Render static site
+        env:
+          API_URL: ${{ vars.API_URL }}
+          SITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: |
+          API_KEY=$(aws ssm get-parameter --name "${SSM_PREFIX}api-key" --with-decryption --query Parameter.Value --output text)
+          echo "::add-mask::$API_KEY"
+          OUT_DIR=dist/pages API_KEY="$API_KEY" go run ./cmd/viewer-static
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/pages
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

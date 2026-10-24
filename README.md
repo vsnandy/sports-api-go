@@ -49,6 +49,34 @@ make viewer            # then open http://127.0.0.1:8081
 
 It listens on 127.0.0.1 only and calls the API from the Go process, so the API key never reaches the browser.
 
+## Publishing to GitHub Pages
+
+A read-only copy of the viewer — leagues, matchups, and the rooting guide — publishes to
+GitHub Pages so leaguemates can view it without running anything locally. It's a static
+snapshot rebuilt every 30 minutes (`.github/workflows/pages.yml`), not a live view: `API_KEY`
+never leaves GitHub Actions, and the published pages contain no key and make no API calls
+from the browser.
+
+```bash
+make viewer-static   # renders to dist/pages using the same .env as `make viewer`
+```
+
+(Locally this renders with every link rooted at `/`, since there's no GitHub Pages config to
+read a base path from; set `SITE_BASE_PATH` yourself, e.g. `SITE_BASE_PATH=/sports-api-go/
+make viewer-static`, to preview it the way it'll look once published. Absolute `/...` hrefs
+don't resolve over `file://`, so preview with a real HTTP server, e.g.
+`python3 -m http.server -d dist/pages`.)
+
+### One-time setup
+
+1. Repo Settings → Pages → Source: **GitHub Actions**. The workflow reads the resulting
+   base path from `actions/configure-pages` itself — no repository variable needed for it.
+2. Add a repository variable `API_URL` (same value as `make viewer-env` would write to
+   `.env` — `terraform -chdir=deploy/terraform output -raw api_url`), if it isn't already
+   set for another workflow.
+3. The workflow reuses `AWS_DEPLOY_ROLE_ARN` (already set up for `deploy.yml`) to read
+   `API_KEY` from SSM; no additional AWS setup is needed.
+
 ## Run locally
 
 ```bash

@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
-	"net/url"
 	"slices"
 
 	"github.com/vsnandy/sports-api-go/internal/domain"
@@ -36,18 +35,19 @@ type rootingPlayer struct {
 }
 
 type rootingView struct {
-	Season, Week, Prev, Next int
-	Weeks                    []int
-	Warnings, NotPlaying     []string
-	Counted                  int
-	Players                  []rootingPlayer
+	Season, Week, Prev, Next                     int
+	LeaguesHref, PrevHref, NextHref, RefreshHref string
+	Weeks                                        []weekOption
+	Warnings, NotPlaying                         []string
+	Counted                                      int
+	Players                                      []rootingPlayer
 }
 
 // buildRooting counts every starter in my matchup of each league: my starters are "for",
 // my opponent's "against". Players with 2+ appearances are listed, biggest |net| first.
 // reqWeek 0 means the API's current week, taken from the first league that loaded.
-func buildRooting(season, reqWeek int, lws []leagueWeek, warnings []string) rootingView {
-	v := rootingView{Season: season, Week: reqWeek, Warnings: slices.Clone(warnings)}
+func buildRooting(season, reqWeek int, lws []leagueWeek, warnings []string, links linker) rootingView {
+	v := rootingView{Season: season, Week: reqWeek, LeaguesHref: links.leagues(), Warnings: slices.Clone(warnings)}
 	if v.Week == 0 {
 		for _, lw := range lws {
 			if lw.Err == nil {
@@ -56,7 +56,7 @@ func buildRooting(season, reqWeek int, lws []leagueWeek, warnings []string) root
 			}
 		}
 	}
-	v.Prev, v.Next, v.Weeks = weekNav(v.Week)
+	v.Prev, v.Next, v.PrevHref, v.NextHref, v.RefreshHref, v.Weeks = weekLinks(v.Week, links.rooting)
 	byKey := map[string]*rootingPlayer{}
 	for _, lw := range lws {
 		if lw.Err != nil {
@@ -95,7 +95,7 @@ func buildRooting(season, reqWeek int, lws []leagueWeek, warnings []string) root
 			continue
 		}
 		v.Counted++
-		href := fmt.Sprintf("/league/%s?week=%d", url.PathEscape(lw.ID), v.Week)
+		href := links.league(lw.ID, v.Week)
 		add := func(s domain.MatchupSide, isFor bool) {
 			for _, e := range s.Roster.Starters {
 				key := playerKey(e.Player, lw.Platform)

@@ -55,7 +55,7 @@ func TestBuildRooting(t *testing.T) {
 		mkLeague("espn:7", "G", domain.PlatformESPN, 4, "1",
 			domain.Matchup{Home: side("1", []domain.RosterEntry{kelce(3)}, nil), Away: side("2", nil, nil)}),
 	}
-	v := buildRooting(2026, 0, lws, []string{"upstream note"})
+	v := buildRooting(2026, 0, lws, []string{"upstream note"}, liveLinker{})
 
 	if v.Season != 2026 || v.Week != 3 || v.Prev != 2 || v.Next != 4 || len(v.Weeks) != 18 {
 		t.Fatalf("header = season %d week %d prev %d next %d weeks %d", v.Season, v.Week, v.Prev, v.Next, len(v.Weeks))
@@ -103,7 +103,7 @@ func TestBuildRootingWeekFromFirstLoaded(t *testing.T) {
 		{ID: "espn:6", Name: "F", Err: &APIError{Status: 502, Message: "boom"}},
 		mkLeague("espn:1", "A", domain.PlatformESPN, 5, "1", domain.Matchup{Home: side("1", nil, nil), Away: side("2", nil, nil)}),
 	}
-	v := buildRooting(2026, 0, lws, nil)
+	v := buildRooting(2026, 0, lws, nil, liveLinker{})
 	if v.Week != 5 || v.Counted != 1 {
 		t.Fatalf("week = %d counted = %d, want 5 and 1", v.Week, v.Counted)
 	}
@@ -111,7 +111,7 @@ func TestBuildRootingWeekFromFirstLoaded(t *testing.T) {
 
 func TestBuildRootingRequestedWeek(t *testing.T) {
 	lws := []leagueWeek{mkLeague("espn:1", "A", domain.PlatformESPN, 2, "1", domain.Matchup{Home: side("1", nil, nil), Away: side("2", nil, nil)})}
-	v := buildRooting(2026, 2, lws, nil)
+	v := buildRooting(2026, 2, lws, nil, liveLinker{})
 	if v.Week != 2 || v.Counted != 1 || len(v.Warnings) != 0 || v.Players != nil {
 		t.Fatalf("view = %+v", v)
 	}
@@ -182,7 +182,7 @@ func TestRootingPage(t *testing.T) {
 		`class="chip for" href="/league/espn:1?week=3">Office League<b>18.00</b>`,
 		`class="chip against" href="/league/sleeper:2?week=3">Dynasty<b>9.50</b>`,
 		`PM<img src="https://sleepercdn.com/content/nfl/players/thumb/4046.jpg"`,
-		`href="?week=2"`, `href="?week=4"`,
+		`href="/rooting?week=2"`, `href="/rooting?week=4"`,
 	)
 	if strings.Index(body, "Patrick Mahomes") > strings.Index(body, "Travis Kelce") {
 		t.Error("equal |net| and appearances should sort by name")
@@ -237,4 +237,22 @@ func TestLeaguesPageLinksRooting(t *testing.T) {
 	_, h := newTestHandler(t)
 	_, body := get(t, h, "/")
 	mustContain(t, body, `href="/rooting"`, "Rooting guide")
+}
+
+func TestLeaguesPageRootingLinkUsesStaticLinker(t *testing.T) {
+	_, srv := newFakeAPI(t)
+	h := NewStaticHandler(&Client{BaseURL: srv.URL, APIKey: "k", HTTP: &http.Client{Timeout: 5 * time.Second}}, "/sports-api-go/")
+	_, body := get(t, h, "/")
+	mustContain(t, body, `href="/sports-api-go/rooting/index.html"`, "Rooting guide")
+}
+
+func TestAllLeaguesLinkUsesStaticLinker(t *testing.T) {
+	_, srv := newFakeAPI(t)
+	h := NewStaticHandler(&Client{BaseURL: srv.URL, APIKey: "k", HTTP: &http.Client{Timeout: 5 * time.Second}}, "/sports-api-go/")
+
+	_, leaguePage := get(t, h, "/league/espn:1")
+	mustContain(t, leaguePage, `href="/sports-api-go/index.html">← All leagues`)
+
+	_, rootingPage := get(t, h, "/rooting")
+	mustContain(t, rootingPage, `href="/sports-api-go/index.html">← All leagues`)
 }

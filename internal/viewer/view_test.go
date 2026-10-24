@@ -57,7 +57,7 @@ func TestBuildLeagueViewFlags(t *testing.T) {
 		}}, Away: domain.MatchupSide{TeamID: "2", Points: 0}},
 		{Home: domain.MatchupSide{TeamID: "1", Points: 10}, Away: domain.MatchupSide{TeamID: "2", Points: 10}},
 	}
-	v := buildLeagueView(lg, ms, Meta{Week: 3})
+	v := buildLeagueView(lg, ms, Meta{Week: 3}, liveLinker{})
 	m := v.Matchups[0]
 	if !m.Home.Leading || m.Away.Leading {
 		t.Errorf("22 vs 0: leading = %v/%v, want true/false", m.Home.Leading, m.Away.Leading)
