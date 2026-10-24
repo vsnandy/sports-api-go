@@ -1,4 +1,4 @@
-.PHONY: test run build deploy smoke tf-init scoreaudit viewer viewer-env
+.PHONY: test run build deploy smoke tf-init scoreaudit viewer viewer-env viewer-static
 
 test:
 	go test ./...
@@ -30,6 +30,11 @@ viewer:
 	@test -f .env || { echo "no .env: run 'make viewer-env' (or copy .env.example)"; exit 1; }
 	@! grep -q replace-me .env || { echo ".env still has placeholder values: run 'make viewer-env' or edit it"; exit 1; }
 	set -a && . ./.env && set +a && go run ./cmd/viewer
+
+# Renders the viewer to dist/pages using the same .env as `make viewer`.
+viewer-static:
+	@test -f .env || { echo "no .env: run 'make viewer-env' (or copy .env.example)"; exit 1; }
+	set -a && . ./.env && set +a && OUT_DIR=dist/pages go run ./cmd/viewer-static
 
 # Writes .env for `make viewer` from Terraform's api_url output and the SSM API key.
 viewer-env:
