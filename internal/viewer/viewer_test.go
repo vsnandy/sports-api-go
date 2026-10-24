@@ -129,7 +129,7 @@ func TestLeaguePage(t *testing.T) {
 		"Rookie Guy", "—",
 		"unmapped_player: espn:9 (Rookie Guy)",
 		"Scoring rules", "DEF", "espn stat 93 (6 pts)", "every 25", "14–17",
-		`href="?week=2"`, `href="?week=4"`, "Refresh",
+		`href="/league/espn:1?week=2"`, `href="/league/espn:1?week=4"`, "Refresh",
 	)
 	for _, u := range f.urls() {
 		if u.Path == "/v1/nfl/leagues/espn:1/matchups" {
@@ -146,7 +146,7 @@ func TestLeaguePageWeekParam(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("status %d", code)
 	}
-	mustContain(t, body, "week 5", `href="?week=4"`, `href="?week=6"`)
+	mustContain(t, body, "week 5", `href="/league/espn:1?week=4"`, `href="/league/espn:1?week=6"`)
 	var sawWeek bool
 	for _, u := range f.urls() {
 		if u.Path == "/v1/nfl/leagues/espn:1/matchups" && u.Query().Get("week") == "5" {
@@ -161,11 +161,11 @@ func TestLeaguePageWeekParam(t *testing.T) {
 func TestLeaguePageWeekBounds(t *testing.T) {
 	_, h := newTestHandler(t)
 	_, first := get(t, h, "/league/espn:1?week=1")
-	if strings.Contains(first, `href="?week=0"`) {
+	if strings.Contains(first, `href="/league/espn:1?week=0"`) {
 		t.Error("week 1 must not link to week 0")
 	}
 	_, last := get(t, h, "/league/espn:1?week=18")
-	if strings.Contains(last, `href="?week=19"`) {
+	if strings.Contains(last, `href="/league/espn:1?week=19"`) {
 		t.Error("week 18 must not link to week 19")
 	}
 }

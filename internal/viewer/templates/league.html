@@ -4,10 +4,10 @@
 <h1>{{.Name}}</h1>
 <div class="muted">{{.Season}} · week {{.Week}}</div>
 <div class="nav">
-{{if .Prev}}<a href="?week={{.Prev}}">‹ Week {{.Prev}}</a>{{end}}
-<form method="get"><select name="week">{{range .Weeks}}<option value="{{.}}"{{if eq . $.Week}} selected{{end}}>Week {{.}}</option>{{end}}</select> <button>Go</button></form>
-{{if .Next}}<a href="?week={{.Next}}">Week {{.Next}} ›</a>{{end}}
-<a href="?week={{.Week}}">⟳ Refresh</a>
+{{if .Prev}}<a href="{{.PrevHref}}">‹ Week {{.Prev}}</a>{{end}}
+<select onchange="location.href=this.value">{{range .Weeks}}<option value="{{.Href}}"{{if eq .Week $.Week}} selected{{end}}>Week {{.Week}}</option>{{end}}</select>
+{{if .Next}}<a href="{{.NextHref}}">Week {{.Next}} ›</a>{{end}}
+<a href="{{.RefreshHref}}">⟳ Refresh</a>
 </div>
 </div>
 {{range .Warnings}}<div class="warn">{{.}}</div>{{end}}

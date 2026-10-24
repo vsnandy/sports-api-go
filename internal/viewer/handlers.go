@@ -51,13 +51,23 @@ var funcs = template.FuncMap{
 }
 
 type server struct {
-	c    *Client
-	tmpl *template.Template
+	c     *Client
+	links linker
+	tmpl  *template.Template
 }
 
 // NewHandler serves the leagues list at /, one league at /league/{id}, and the rooting guide at /rooting.
-func NewHandler(c *Client) http.Handler {
-	s := &server{c: c, tmpl: template.Must(template.New("").Funcs(funcs).ParseFS(templateFS, "templates/*.html"))}
+func NewHandler(c *Client) http.Handler { return newHandler(c, liveLinker{}) }
+
+// NewStaticHandler is NewHandler, but every page's internal links are file paths under
+// basePath (e.g. "/sports-api-go/") instead of live-server query strings, for exporting
+// the site to static files. basePath must start and end with "/"; "/" means site root.
+func NewStaticHandler(c *Client, basePath string) http.Handler {
+	return newHandler(c, staticLinker{base: basePath})
+}
+
+func newHandler(c *Client, links linker) http.Handler {
+	s := &server{c: c, links: links, tmpl: template.Must(template.New("").Funcs(funcs).ParseFS(templateFS, "templates/*.html"))}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.leagues)
 	mux.HandleFunc("GET /league/{id}", s.league)
@@ -102,7 +112,7 @@ func (s *server) leagues(w http.ResponseWriter, r *http.Request) {
 	v := leaguesView{Season: meta.Season, Warnings: meta.Warnings}
 	var sleeperLinks []leagueLink
 	for _, l := range ls {
-		link := leagueLink{Name: l.Name, Href: "/league/" + url.PathEscape(l.ID), Platform: string(l.Platform)}
+		link := leagueLink{Name: l.Name, Href: s.links.league(l.ID, 0), Platform: string(l.Platform)}
 		if l.Platform == domain.PlatformESPN {
 			v.Leagues = append(v.Leagues, link)
 		} else {
@@ -135,7 +145,7 @@ func (s *server) league(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, err)
 		return
 	}
-	s.render(w, http.StatusOK, "league.html", buildLeagueView(lg, ms, meta))
+	s.render(w, http.StatusOK, "league.html", buildLeagueView(lg, ms, meta, s.links))
 }
 
 func (s *server) fail(w http.ResponseWriter, err error) {
@@ -222,5 +232,5 @@ func (s *server) rooting(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, firstErr)
 		return
 	}
-	s.render(w, http.StatusOK, "rooting.html", buildRooting(meta.Season, week, lws, meta.Warnings))
+	s.render(w, http.StatusOK, "rooting.html", buildRooting(meta.Season, week, lws, meta.Warnings, s.links))
 }
